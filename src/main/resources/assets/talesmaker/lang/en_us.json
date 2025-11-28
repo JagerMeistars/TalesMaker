@@ -1,13 +1,3 @@
 {
-  "itemGroup.talesmaker": "Example Mod Tab",
-  "block.talesmaker.example_block": "Example Block",
-  "item.talesmaker.example_item": "Example Item",
-
-  "talesmaker.configuration.title": "TalesMaker Configs",
-  "talesmaker.configuration.section.talesmaker.common.toml": "TalesMaker Configs",
-  "talesmaker.configuration.section.talesmaker.common.toml.title": "TalesMaker Configs",
-  "talesmaker.configuration.items": "Item List",
-  "talesmaker.configuration.logDirtBlock": "Log Dirt Block",
-  "talesmaker.configuration.magicNumberIntroduction": "Magic Number Text",
-  "talesmaker.configuration.magicNumber": "Magic Number"
+  "entity.talesmaker.npc": "NPC"
 }

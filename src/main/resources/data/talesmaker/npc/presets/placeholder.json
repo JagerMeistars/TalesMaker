@@ -1,0 +1,18 @@
+[
+    {
+        "id": "placeholder",
+        "head": "head",
+        "name": {
+            "text": "Placeholder NPC",
+            "color": "aqua",
+            "bold": true
+        },
+        "model": "talesmaker:geo/entity/placeholder.geo.json",
+        "texture": "talesmaker:textures/entity/placeholder.png",
+        "animations": {
+            "path": "talesmaker:animations/entity/placeholder.animation.json",
+            "idle": "idle",
+            "walk": "walk"
+        }
+    }
+]
