@@ -8,7 +8,6 @@ import com.mojang.serialization.JsonOps;
 import dcs.jagermeistars.talesmaker.entity.NpcEntity;
 import dcs.jagermeistars.talesmaker.network.ModNetworking;
 import dcs.jagermeistars.talesmaker.network.ReloadNotifyPacket;
-import dcs.jagermeistars.talesmaker.network.ValidateResourcesPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.minecraft.server.MinecraftServer;
@@ -84,20 +83,8 @@ public class NpcPresetManager extends SimpleJsonResourceReloadListener {
             ModNetworking.sendWarningToAll(error);
         }
 
-        // Send reload notification to trigger client-side NPC validation
+        // Send reload notification to trigger client-side cache clear
         PacketDistributor.sendToAllPlayers(new ReloadNotifyPacket(presets.size(), !loadErrors.isEmpty()));
-
-        // Request resource validation from all clients for each preset
-        for (Map.Entry<ResourceLocation, NpcPreset> entry : presets.entrySet()) {
-            NpcPreset preset = entry.getValue();
-            PacketDistributor.sendToAllPlayers(new ValidateResourcesPacket(
-                    entry.getKey().toString(),
-                    preset.model().toString(),
-                    preset.texture().toString(),
-                    preset.emissive() != null ? preset.emissive().toString() : "",
-                    preset.animations().path().toString()
-            ));
-        }
     }
 
     private void parsePreset(String namespace, JsonElement json) {

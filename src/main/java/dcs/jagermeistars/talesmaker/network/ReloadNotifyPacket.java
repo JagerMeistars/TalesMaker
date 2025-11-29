@@ -2,7 +2,6 @@ package dcs.jagermeistars.talesmaker.network;
 
 import dcs.jagermeistars.talesmaker.TalesMaker;
 import dcs.jagermeistars.talesmaker.client.model.NpcModel;
-import dcs.jagermeistars.talesmaker.client.notification.NotificationManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -29,11 +28,6 @@ public record ReloadNotifyPacket(int presetCount, boolean hasErrors) implements 
         context.enqueueWork(() -> {
             // Clear validation cache so errors will be shown again on next render
             NpcModel.clearValidationCache();
-
-            // Show success message if no preset errors
-            if (!packet.hasErrors()) {
-                NotificationManager.success("Loaded " + packet.presetCount() + " NPC presets");
-            }
         });
     }
 }

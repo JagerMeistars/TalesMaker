@@ -27,17 +27,6 @@ public class ModNetworking {
                 ReloadNotifyPacket::handle
         );
 
-        registrar.playToClient(
-                ValidateResourcesPacket.TYPE,
-                ValidateResourcesPacket.STREAM_CODEC,
-                ValidateResourcesPacket::handle
-        );
-
-        registrar.playToServer(
-                ResourceValidationResponsePacket.TYPE,
-                ResourceValidationResponsePacket.STREAM_CODEC,
-                ResourceValidationResponsePacket::handle
-        );
     }
 
     public static void sendNotificationToPlayer(ServerPlayer player, String message, int type) {

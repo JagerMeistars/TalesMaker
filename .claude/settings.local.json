@@ -9,7 +9,9 @@
       "Bash(./gradlew build:*)",
       "Bash(./gradlew runClient:*)",
       "Bash(cmd /c \"cd /d c:\\Users\\konst\\Jager.DCS\\TalesMaker && gradlew.bat build 2>&1\")",
-      "Bash(powershell -Command \"Set-Location ''c:\\Users\\konst\\Jager.DCS\\TalesMaker''; .\\gradlew.bat build 2>&1\")"
+      "Bash(powershell -Command \"Set-Location ''c:\\Users\\konst\\Jager.DCS\\TalesMaker''; .\\gradlew.bat build 2>&1\")",
+      "Bash(del \"c:\\Users\\konst\\Jager.DCS\\TalesMaker\\src\\main\\java\\dcs\\jagermeistars\\talesmaker\\network\\ValidateResourcesPacket.java\")",
+      "Bash(del \"c:\\Users\\konst\\Jager.DCS\\TalesMaker\\src\\main\\java\\dcs\\jagermeistars\\talesmaker\\network\\ResourceValidationResponsePacket.java\")"
     ],
     "deny": [],
     "ask": []

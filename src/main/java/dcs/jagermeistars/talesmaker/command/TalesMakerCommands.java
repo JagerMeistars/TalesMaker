@@ -7,8 +7,6 @@ import dcs.jagermeistars.talesmaker.TalesMaker;
 import dcs.jagermeistars.talesmaker.data.NpcPreset;
 import dcs.jagermeistars.talesmaker.entity.NpcEntity;
 import dcs.jagermeistars.talesmaker.init.ModEntities;
-import dcs.jagermeistars.talesmaker.network.ValidateResourcesPacket;
-import net.neoforged.neoforge.network.PacketDistributor;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -73,15 +71,6 @@ public class TalesMakerCommands {
 
         // Spawn in world
         serverLevel.addFreshEntity(npc);
-
-        // Request resource validation from all clients
-        PacketDistributor.sendToAllPlayers(new ValidateResourcesPacket(
-                presetId.toString(),
-                preset.model().toString(),
-                preset.texture().toString(),
-                preset.emissive() != null ? preset.emissive().toString() : "",
-                preset.animations().path().toString()
-        ));
 
         source.sendSuccess(() -> Component.literal("Created NPC with preset: ").append(preset.name()), true);
         return 1;

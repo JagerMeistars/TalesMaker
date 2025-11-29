@@ -20,12 +20,13 @@ public class NotificationOverlay {
     private static final int LINE_HEIGHT = 12;
     private static final int MARGIN = 4;
     private static final int ICON_WIDTH = 14;
-    private static final int SLIDE_DISTANCE = 30; // Pixels to slide up when fading
+    private static final int SLIDE_DISTANCE = 40; // Pixels to slide when appearing/fading
+    private static final int APPEAR_SLIDE = 20; // Pixels to slide in from right
 
     // Unicode icons
-    private static final String ICON_SUCCESS = "\u2714"; // ✔ checkmark
-    private static final String ICON_WARNING = "\u26A0"; // ⚠ warning triangle
-    private static final String ICON_ERROR = "\u2716";   // ✖ cross
+    private static final String ICON_SUCCESS = "\u2714"; // checkmark
+    private static final String ICON_WARNING = "\u26A0"; // warning triangle
+    private static final String ICON_ERROR = "\u2716";   // cross
 
     @SubscribeEvent
     public static void onRenderGui(RenderGuiLayerEvent.Post event) {
@@ -46,21 +47,31 @@ public class NotificationOverlay {
         int baseY = PADDING;
 
         for (NotificationManager.Notification notification : notifications) {
+            float appearProgress = notification.getAppearProgress();
             float fadeProgress = notification.getFadeProgress();
 
-            // Calculate Y offset for slide-up animation
-            int slideOffset = (int) (fadeProgress * SLIDE_DISTANCE);
-            int y = baseY - slideOffset;
+            // Smooth easing for appear animation (ease out)
+            float easedAppear = 1f - (1f - appearProgress) * (1f - appearProgress);
+            // Smooth easing for fade animation (ease in)
+            float easedFade = fadeProgress * fadeProgress;
 
-            // Calculate alpha for fade out
-            int alpha = (int) ((1f - fadeProgress) * 255);
-            if (alpha <= 0) continue;
+            // Calculate X offset for slide-in animation (from right)
+            int slideInOffset = (int) ((1f - easedAppear) * APPEAR_SLIDE);
+            // Calculate Y offset for slide-up animation when fading
+            int slideUpOffset = (int) (easedFade * SLIDE_DISTANCE);
 
-            int bgColor = (notification.type().color & 0x00FFFFFF) | (alpha << 24);
+            int y = baseY - slideUpOffset;
+
+            // Combine alpha from appear and fade
+            float alpha = easedAppear * (1f - easedFade);
+            int alphaInt = (int) (alpha * 255);
+            if (alphaInt <= 0) continue;
+
+            int bgColor = (notification.type().color & 0x00FFFFFF) | (alphaInt << 24);
             // Warning uses black text, others use white
             int textColor = notification.type() == NotificationManager.NotificationType.WARNING
-                    ? (0x000000 | (alpha << 24))
-                    : (0xFFFFFF | (alpha << 24));
+                    ? (0x000000 | (alphaInt << 24))
+                    : (0xFFFFFF | (alphaInt << 24));
 
             // Get icon based on type
             String icon = switch (notification.type()) {
@@ -69,11 +80,17 @@ public class NotificationOverlay {
                 case ERROR -> ICON_ERROR;
             };
 
+            // Build display message with count if > 1
+            String displayMessage = notification.message();
+            if (notification.count() > 1) {
+                displayMessage = notification.count() + "x " + displayMessage;
+            }
+
             // Calculate height based on message
-            String[] lines = splitMessage(notification.message(), font, NOTIFICATION_WIDTH - PADDING * 2 - ICON_WIDTH);
+            String[] lines = splitMessage(displayMessage, font, NOTIFICATION_WIDTH - PADDING * 2 - ICON_WIDTH);
             int contentHeight = (lines.length * LINE_HEIGHT) + MARGIN * 2;
 
-            int x = screenWidth - NOTIFICATION_WIDTH - PADDING;
+            int x = screenWidth - NOTIFICATION_WIDTH - PADDING + slideInOffset;
 
             // Draw background
             graphics.fill(x, y, x + NOTIFICATION_WIDTH, y + contentHeight, bgColor);
@@ -85,7 +102,7 @@ public class NotificationOverlay {
             // Draw icon centered vertically
             graphics.drawString(font, icon, x + PADDING, startY, textColor, false);
 
-            // Draw message lines centered vertically
+            // Draw message lines centered vertically (left-aligned horizontally)
             int lineY = startY;
             for (String line : lines) {
                 graphics.drawString(font, line, x + PADDING + ICON_WIDTH, lineY, textColor, false);
