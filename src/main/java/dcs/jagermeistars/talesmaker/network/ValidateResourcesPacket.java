@@ -45,23 +45,23 @@ public record ValidateResourcesPacket(
             List<String> missingResources = new ArrayList<>();
 
             // Check model
-            if (!packet.modelPath().isEmpty() && !resourceExists(packet.modelPath())) {
-                missingResources.add("model:" + packet.modelPath());
+            if (!packet.modelPath().isEmpty() && !resourceExists(packet.modelPath(), "model")) {
+                missingResources.add("model: " + packet.modelPath());
             }
 
             // Check texture
-            if (!packet.texturePath().isEmpty() && !resourceExists(packet.texturePath())) {
-                missingResources.add("texture:" + packet.texturePath());
+            if (!packet.texturePath().isEmpty() && !resourceExists(packet.texturePath(), "texture")) {
+                missingResources.add("texture: " + packet.texturePath());
             }
 
             // Check emissive (optional)
-            if (!packet.emissivePath().isEmpty() && !resourceExists(packet.emissivePath())) {
-                missingResources.add("emissive:" + packet.emissivePath());
+            if (!packet.emissivePath().isEmpty() && !resourceExists(packet.emissivePath(), "emissive")) {
+                missingResources.add("emissive: " + packet.emissivePath());
             }
 
             // Check animation
-            if (!packet.animationPath().isEmpty() && !resourceExists(packet.animationPath())) {
-                missingResources.add("animation:" + packet.animationPath());
+            if (!packet.animationPath().isEmpty() && !resourceExists(packet.animationPath(), "animation")) {
+                missingResources.add("animation: " + packet.animationPath());
             }
 
             // Send response back to server
@@ -72,10 +72,21 @@ public record ValidateResourcesPacket(
         });
     }
 
-    private static boolean resourceExists(String path) {
+    private static boolean resourceExists(String path, String type) {
         try {
             ResourceLocation location = ResourceLocation.parse(path);
-            return Minecraft.getInstance().getResourceManager().getResource(location).isPresent();
+            ResourceLocation fullPath = switch (type) {
+                case "model" -> ResourceLocation.fromNamespaceAndPath(
+                        location.getNamespace(), "geo/" + location.getPath() + ".geo.json");
+                case "texture" -> ResourceLocation.fromNamespaceAndPath(
+                        location.getNamespace(), "textures/" + location.getPath() + ".png");
+                case "emissive" -> ResourceLocation.fromNamespaceAndPath(
+                        location.getNamespace(), "textures/" + location.getPath() + ".png");
+                case "animation" -> ResourceLocation.fromNamespaceAndPath(
+                        location.getNamespace(), "animations/" + location.getPath() + ".animation.json");
+                default -> location;
+            };
+            return Minecraft.getInstance().getResourceManager().getResource(fullPath).isPresent();
         } catch (Exception e) {
             return false;
         }

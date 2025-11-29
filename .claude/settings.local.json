@@ -7,7 +7,9 @@
       "Bash(cmd /c \"cd /d c:\\Users\\konst\\Jager.DCS\\TalesMaker && call gradlew.bat build\")",
       "Bash(powershell -Command \"Set-Location ''c:\\Users\\konst\\Jager.DCS\\TalesMaker''; .\\gradlew.bat build\")",
       "Bash(./gradlew build:*)",
-      "Bash(./gradlew runClient:*)"
+      "Bash(./gradlew runClient:*)",
+      "Bash(cmd /c \"cd /d c:\\Users\\konst\\Jager.DCS\\TalesMaker && gradlew.bat build 2>&1\")",
+      "Bash(powershell -Command \"Set-Location ''c:\\Users\\konst\\Jager.DCS\\TalesMaker''; .\\gradlew.bat build 2>&1\")"
     ],
     "deny": [],
     "ask": []

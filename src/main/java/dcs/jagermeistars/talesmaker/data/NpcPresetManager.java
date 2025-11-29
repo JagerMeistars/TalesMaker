@@ -92,10 +92,10 @@ public class NpcPresetManager extends SimpleJsonResourceReloadListener {
             NpcPreset preset = entry.getValue();
             PacketDistributor.sendToAllPlayers(new ValidateResourcesPacket(
                     entry.getKey().toString(),
-                    preset.model(),
-                    preset.texture(),
-                    preset.emissive() != null ? preset.emissive() : "",
-                    preset.animation()
+                    preset.model().toString(),
+                    preset.texture().toString(),
+                    preset.emissive() != null ? preset.emissive().toString() : "",
+                    preset.animations().path().toString()
             ));
         }
     }
