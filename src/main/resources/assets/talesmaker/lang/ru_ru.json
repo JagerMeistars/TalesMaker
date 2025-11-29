@@ -1,4 +1,10 @@
 {
-    "entity.talesmaker.generic_npc": "NPC",
-    "item.talesmaker.generic_npc_spawn_egg": "Яйцо призыва NPC"
+  "entity.talesmaker.npc": "NPC",
+  "error.talesmaker.missing_model": "Отсутствует модель",
+  "error.talesmaker.missing_texture": "Отсутствует текстура",
+  "error.talesmaker.missing_animation": "Отсутствует анимация",
+  "key.talesmaker.history": "Открыть историю диалогов",
+  "key.categories.talesmaker": "TalesMaker",
+  "screen.talesmaker.history_title": "История",
+  "screen.talesmaker.no_history": "Пусто"
 }

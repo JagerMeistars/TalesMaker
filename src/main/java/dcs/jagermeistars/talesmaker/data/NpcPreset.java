@@ -9,6 +9,7 @@ import net.minecraft.resources.ResourceLocation;
 public record NpcPreset(
                 ResourceLocation id,
                 Component name,
+                ResourceLocation icon,
                 ResourceLocation model,
                 ResourceLocation texture,
                 ResourceLocation emissive,
@@ -63,18 +64,19 @@ public record NpcPreset(
         public static final Codec<NpcPreset> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                         Codec.STRING.fieldOf("id").forGetter(preset -> preset.id().getPath()),
                         ComponentSerialization.CODEC.fieldOf("name").forGetter(NpcPreset::name),
+                        ResourceLocation.CODEC.optionalFieldOf("icon").forGetter(preset -> java.util.Optional.ofNullable(preset.icon())),
                         ResourceLocation.CODEC.fieldOf("model").forGetter(NpcPreset::model),
                         ResourceLocation.CODEC.fieldOf("texture").forGetter(NpcPreset::texture),
                         ResourceLocation.CODEC.optionalFieldOf("emissive").forGetter(preset -> java.util.Optional.ofNullable(preset.emissive())),
                         AnimationConfig.CODEC.fieldOf("animations").forGetter(NpcPreset::animations),
                         Codec.STRING.optionalFieldOf("head", "head").forGetter(NpcPreset::head),
                         HitboxConfig.CODEC.optionalFieldOf("hitbox", HitboxConfig.DEFAULT).forGetter(NpcPreset::hitbox))
-                        .apply(instance, (id, name, model, texture, emissive, animations, head, hitbox) -> new NpcPreset(
-                                        null, name, model, texture, emissive.orElse(null), animations, head, hitbox)
+                        .apply(instance, (id, name, icon, model, texture, emissive, animations, head, hitbox) -> new NpcPreset(
+                                        null, name, icon.orElse(null), model, texture, emissive.orElse(null), animations, head, hitbox)
                         ));
 
         // Helper to create preset with full ResourceLocation ID
         public NpcPreset withId(ResourceLocation fullId) {
-                return new NpcPreset(fullId, name, model, texture, emissive, animations, head, hitbox);
+                return new NpcPreset(fullId, name, icon, model, texture, emissive, animations, head, hitbox);
         }
 }

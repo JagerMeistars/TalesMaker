@@ -27,6 +27,23 @@ public class ModNetworking {
                 ReloadNotifyPacket::handle
         );
 
+        registrar.playToClient(
+                DialoguePacket.TYPE,
+                DialoguePacket.STREAM_CODEC,
+                DialoguePacket::handle
+        );
+
+        registrar.playToClient(
+                DialogueTimesPacket.TYPE,
+                DialogueTimesPacket.STREAM_CODEC,
+                DialogueTimesPacket::handle
+        );
+
+        registrar.playToClient(
+                ClearHistoryPacket.TYPE,
+                ClearHistoryPacket.STREAM_CODEC,
+                ClearHistoryPacket::handle
+        );
     }
 
     public static void sendNotificationToPlayer(ServerPlayer player, String message, int type) {

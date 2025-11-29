@@ -3,9 +3,10 @@ package dcs.jagermeistars.talesmaker.client.model;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 import dcs.jagermeistars.talesmaker.TalesMaker;
-import dcs.jagermeistars.talesmaker.client.notification.NotificationManager;
+import dcs.jagermeistars.talesmaker.client.notification.ResourceErrorManager;
 import dcs.jagermeistars.talesmaker.entity.NpcEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
@@ -31,10 +32,16 @@ public class NpcModel extends GeoModel<NpcEntity> {
     private static final ResourceLocation ERROR_TEXTURE =
             ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/entity/error.png");
 
-    private static final Set<ResourceLocation> MISSING_RESOURCES = Collections.synchronizedSet(new HashSet<>());
+    // Track which entities have already reported errors (by UUID + resource type)
+    // This prevents spam every frame but allows different entities to report the same error
+    private static final Set<String> REPORTED_ENTITIES = Collections.synchronizedSet(new HashSet<>());
 
     public static void clearValidationCache() {
-        MISSING_RESOURCES.clear();
+        REPORTED_ENTITIES.clear();
+    }
+
+    private String getReportKey(NpcEntity entity, String resourceType) {
+        return entity.getUUID().toString() + ":" + resourceType;
     }
 
     private boolean isModelMissing(NpcEntity animatable) {
@@ -52,8 +59,10 @@ public class NpcModel extends GeoModel<NpcEntity> {
         if (resourceExists(modelPath)) {
             return modelPath;
         }
-        if (MISSING_RESOURCES.add(modelPath)) {
-            NotificationManager.warning("Missing model: " + modelPath);
+        // Report error once per entity (until /reload)
+        String key = getReportKey(animatable, "model");
+        if (REPORTED_ENTITIES.add(key)) {
+            ResourceErrorManager.addError(ResourceErrorManager.ResourceType.MODEL, modelPath);
         }
         return PLACEHOLDER_MODEL;
     }
@@ -73,8 +82,10 @@ public class NpcModel extends GeoModel<NpcEntity> {
         if (resourceExists(texturePath)) {
             return texturePath;
         }
-        if (MISSING_RESOURCES.add(texturePath)) {
-            NotificationManager.warning("Missing texture: " + texturePath);
+        // Report error once per entity (until /reload)
+        String key = getReportKey(animatable, "texture");
+        if (REPORTED_ENTITIES.add(key)) {
+            ResourceErrorManager.addError(ResourceErrorManager.ResourceType.TEXTURE, texturePath);
         }
         // Texture missing but model exists - use error texture
         return ERROR_TEXTURE;
@@ -95,8 +106,10 @@ public class NpcModel extends GeoModel<NpcEntity> {
         if (resourceExists(animationPath)) {
             return animationPath;
         }
-        if (MISSING_RESOURCES.add(animationPath)) {
-            NotificationManager.warning("Missing animation: " + animationPath);
+        // Report error once per entity (until /reload)
+        String key = getReportKey(animatable, "animation");
+        if (REPORTED_ENTITIES.add(key)) {
+            ResourceErrorManager.addError(ResourceErrorManager.ResourceType.ANIMATION, animationPath);
         }
         return PLACEHOLDER_ANIMATION;
     }

@@ -9,6 +9,7 @@
         },
         "model": "talesmaker:geo/entity/placeholder.geo.json",
         "texture": "talesmaker:textures/entity/placeholder.png",
+        "icon": "talesmaker:textures/entity/error.png",
         "emissive": "talesmaker:textures/entity/placeholder.png",
         "animations": {
             "path": "talesmaker:animations/entity/placeholder.animation.json",

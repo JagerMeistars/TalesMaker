@@ -29,6 +29,8 @@ import software.bernie.geckolib.animation.RawAnimation;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 public class NpcEntity extends PathfinderMob implements GeoEntity {
+    private static final EntityDataAccessor<String> CUSTOM_ID = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> PRESET_ID = SynchedEntityData.defineId(NpcEntity.class,
             EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> NPC_NAME = SynchedEntityData.defineId(NpcEntity.class,
@@ -80,6 +82,7 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
     @Override
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
+        builder.define(CUSTOM_ID, "");
         builder.define(PRESET_ID, "");
         builder.define(NPC_NAME, "NPC");
         builder.define(MODEL_PATH, "");
@@ -121,6 +124,14 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         this.refreshDimensions();
         this.setCustomName(preset.name());
         this.setCustomNameVisible(false);
+    }
+
+    public void setCustomId(String customId) {
+        this.entityData.set(CUSTOM_ID, customId != null ? customId : "");
+    }
+
+    public String getCustomId() {
+        return this.entityData.get(CUSTOM_ID);
     }
 
     public String getPresetId() {
@@ -193,6 +204,7 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
     @Override
     public void addAdditionalSaveData(CompoundTag compound) {
         super.addAdditionalSaveData(compound);
+        compound.putString("CustomId", getCustomId());
         compound.putString("PresetId", getPresetId());
         compound.putString("NpcName", this.entityData.get(NPC_NAME));
         compound.putString("ModelPath", this.entityData.get(MODEL_PATH));
@@ -211,6 +223,9 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
     @Override
     public void readAdditionalSaveData(CompoundTag compound) {
         super.readAdditionalSaveData(compound);
+        if (compound.contains("CustomId")) {
+            this.entityData.set(CUSTOM_ID, compound.getString("CustomId"));
+        }
         if (compound.contains("PresetId")) {
             this.entityData.set(PRESET_ID, compound.getString("PresetId"));
         }

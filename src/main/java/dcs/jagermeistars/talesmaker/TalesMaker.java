@@ -51,7 +51,7 @@ public class TalesMaker {
 
     @SubscribeEvent
     public void onRegisterCommands(RegisterCommandsEvent event) {
-        TalesMakerCommands.register(event.getDispatcher());
+        TalesMakerCommands.register(event.getDispatcher(), event.getBuildContext());
     }
 
     @SubscribeEvent

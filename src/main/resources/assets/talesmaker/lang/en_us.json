@@ -1,3 +1,10 @@
 {
-  "entity.talesmaker.npc": "NPC"
+  "entity.talesmaker.npc": "NPC",
+  "error.talesmaker.missing_model": "Missing model",
+  "error.talesmaker.missing_texture": "Missing texture",
+  "error.talesmaker.missing_animation": "Missing animation",
+  "key.talesmaker.history": "Open Dialogue History",
+  "key.categories.talesmaker": "TalesMaker",
+  "screen.talesmaker.history_title": "History",
+  "screen.talesmaker.no_history": "Empty"
 }
