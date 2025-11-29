@@ -37,7 +37,7 @@ public class TalesMaker {
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
-        LOGGER.info("HELLO FROM COMMON SETUP");
+        // Common setup logic
     }
 
     private void onEntityAttributeCreation(EntityAttributeCreationEvent event) {
@@ -46,18 +46,16 @@ public class TalesMaker {
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
-        LOGGER.info("HELLO from server starting");
+        // Server starting logic
     }
 
     @SubscribeEvent
     public void onRegisterCommands(RegisterCommandsEvent event) {
         TalesMakerCommands.register(event.getDispatcher());
-        LOGGER.info("Registered TalesMaker commands");
     }
 
     @SubscribeEvent
     public void onAddReloadListener(AddReloadListenerEvent event) {
         event.addListener(PRESET_MANAGER);
-        LOGGER.info("Registered NPC Preset Manager");
     }
 }

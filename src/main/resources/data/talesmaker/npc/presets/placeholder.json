@@ -9,10 +9,19 @@
         },
         "model": "talesmaker:geo/entity/placeholder.geo.json",
         "texture": "talesmaker:textures/entity/placeholder.png",
+        "emissive": "talesmaker:textures/entity/placeholder.png",
         "animations": {
             "path": "talesmaker:animations/entity/placeholder.animation.json",
-            "idle": "idle",
-            "walk": "walk"
+            "idle": "talesmaker.placeholder.idle",
+            "walk": "talesmaker.placeholder.walk",
+            "death": {
+                "name": "talesmaker.placeholder.death",
+                "duration": 20
+            }
+        },
+        "hitbox": {
+            "width": 1.5,
+            "height": 1.5
         }
     }
 ]
