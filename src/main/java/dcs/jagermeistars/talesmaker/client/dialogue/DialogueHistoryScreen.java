@@ -123,7 +123,7 @@ public class DialogueHistoryScreen extends Screen {
         graphics.fill(panelLeft + panelWidth - 1, panelTop, panelLeft + panelWidth, panelTop + panelHeight, 0xFF000000);
 
         // Title - "История"
-        graphics.drawCenteredString(font, title, panelLeft + panelWidth / 2, panelTop + 5, 0xFFFFFF);
+        graphics.drawCenteredString(font, title, panelLeft + panelWidth / 2, panelTop + 7, 0xFFFFFF);
 
         int contentTop = panelTop + 25;
         int contentBottom = panelTop + panelHeight - PADDING;

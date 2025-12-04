@@ -44,6 +44,12 @@ public class ModNetworking {
                 ClearHistoryPacket.STREAM_CODEC,
                 ClearHistoryPacket::handle
         );
+
+        registrar.playToServer(
+                InteractScriptPacket.TYPE,
+                InteractScriptPacket.STREAM_CODEC,
+                InteractScriptPacket::handle
+        );
     }
 
     public static void sendNotificationToPlayer(ServerPlayer player, String message, int type) {

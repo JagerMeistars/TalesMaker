@@ -15,9 +15,14 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
+import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
+import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
+import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.damagesource.DamageSource;
+import javax.annotation.Nullable;
 import net.minecraft.world.level.Level;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
@@ -58,10 +63,95 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
     private static final EntityDataAccessor<Integer> DEATH_DURATION = SynchedEntityData.defineId(NpcEntity.class,
             EntityDataSerializers.INT);
 
+    // Script system fields
+    private static final EntityDataAccessor<String> SCRIPT_TYPE = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<String> SCRIPT_COMMAND = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<Boolean> INTERACT_USED = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.BOOLEAN);
+
+    // AI and invulnerability fields
+    private static final EntityDataAccessor<Boolean> AI_ENABLED = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> INVULNERABLE = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.BOOLEAN);
+
+    // Player nearby event fields
+    private static final EntityDataAccessor<Float> PLAYER_NEARBY_RADIUS = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Boolean> PLAYER_NEARBY_TRIGGERED = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.BOOLEAN);
+
+    // Look-at system fields
+    private static final EntityDataAccessor<Boolean> LOOK_AT_ACTIVE = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> LOOK_AT_CONTINUOUS = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Float> LOOK_AT_TARGET_X = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> LOOK_AT_TARGET_Y = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> LOOK_AT_TARGET_Z = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Integer> LOOK_AT_ENTITY_ID = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.INT);
+
+    // View range limit fields (for restricting look rotation)
+    private static final EntityDataAccessor<Float> VIEW_RANGE_MIN_YAW = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> VIEW_RANGE_MAX_YAW = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> VIEW_RANGE_MIN_PITCH = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> VIEW_RANGE_MAX_PITCH = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+
+    // Movement system fields
+    private static final EntityDataAccessor<String> MOVEMENT_STATE = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.STRING); // idle, goto, patrol, follow, wander, directional
+    private static final EntityDataAccessor<Float> MOVEMENT_TARGET_X = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> MOVEMENT_TARGET_Y = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> MOVEMENT_TARGET_Z = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Integer> MOVEMENT_TARGET_ENTITY_ID = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.INT);
+    private static final EntityDataAccessor<String> PATROL_POINTS = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.STRING); // JSON array of points
+    private static final EntityDataAccessor<Integer> PATROL_INDEX = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.INT);
+    private static final EntityDataAccessor<String> WANDER_POLYGON = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.STRING); // JSON array of polygon vertices
+    private static final EntityDataAccessor<Float> WANDER_Y = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DIRECTIONAL_REMAINING = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DIRECTIONAL_VEC_X = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DIRECTIONAL_VEC_Z = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.FLOAT);
+
+    // Custom animation fields
+    private static final EntityDataAccessor<String> CUSTOM_ANIMATION = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<String> CUSTOM_ANIMATION_MODE = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.STRING); // once, loop, hold
+
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
+    private String lastPlayedOnceAnimation = ""; // Track which "once" animation was played to detect completion
+
+    // Handlers
+    private final NpcMovementHandler movementHandler;
+    private final NpcLookHandler lookHandler;
 
     public NpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
+        this.movementHandler = new NpcMovementHandler(this);
+        this.lookHandler = new NpcLookHandler(this);
+        // AI is disabled by default
+        this.setNoAi(true);
     }
 
     @Override
@@ -96,14 +186,62 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         builder.define(HITBOX_WIDTH, 0.6f);
         builder.define(HITBOX_HEIGHT, 1.8f);
         builder.define(DEATH_DURATION, 40);
+        // Script system
+        builder.define(SCRIPT_TYPE, "");
+        builder.define(SCRIPT_COMMAND, "");
+        builder.define(INTERACT_USED, false);
+        // AI and invulnerability (AI disabled by default)
+        builder.define(AI_ENABLED, false);
+        builder.define(INVULNERABLE, false);
+        // Player nearby event
+        builder.define(PLAYER_NEARBY_RADIUS, 0.0f);
+        builder.define(PLAYER_NEARBY_TRIGGERED, false);
+        // Look-at system
+        builder.define(LOOK_AT_ACTIVE, false);
+        builder.define(LOOK_AT_CONTINUOUS, false);
+        builder.define(LOOK_AT_TARGET_X, 0.0f);
+        builder.define(LOOK_AT_TARGET_Y, 0.0f);
+        builder.define(LOOK_AT_TARGET_Z, 0.0f);
+        builder.define(LOOK_AT_ENTITY_ID, -1);
+        // View range limits (default: no limits = -180 to 180 for yaw, -90 to 90 for pitch)
+        builder.define(VIEW_RANGE_MIN_YAW, -180.0f);
+        builder.define(VIEW_RANGE_MAX_YAW, 180.0f);
+        builder.define(VIEW_RANGE_MIN_PITCH, -90.0f);
+        builder.define(VIEW_RANGE_MAX_PITCH, 90.0f);
+        // Movement system
+        builder.define(MOVEMENT_STATE, "idle");
+        builder.define(MOVEMENT_TARGET_X, 0.0f);
+        builder.define(MOVEMENT_TARGET_Y, 0.0f);
+        builder.define(MOVEMENT_TARGET_Z, 0.0f);
+        builder.define(MOVEMENT_TARGET_ENTITY_ID, -1);
+        builder.define(PATROL_POINTS, "");
+        builder.define(PATROL_INDEX, 0);
+        builder.define(WANDER_POLYGON, "");
+        builder.define(WANDER_Y, 0.0f);
+        builder.define(DIRECTIONAL_REMAINING, 0.0f);
+        builder.define(DIRECTIONAL_VEC_X, 0.0f);
+        builder.define(DIRECTIONAL_VEC_Z, 0.0f);
+        // Custom animation
+        builder.define(CUSTOM_ANIMATION, "");
+        builder.define(CUSTOM_ANIMATION_MODE, "");
     }
 
     @Override
     protected void registerGoals() {
         this.goalSelector.addGoal(0, new FloatGoal(this));
-        this.goalSelector.addGoal(1, new WaterAvoidingRandomStrollGoal(this, 1.0D));
-        this.goalSelector.addGoal(2, new LookAtPlayerGoal(this, Player.class, 8.0F));
-        this.goalSelector.addGoal(3, new RandomLookAroundGoal(this));
+        this.goalSelector.addGoal(1, new OpenDoorGoal(this, true));
+        this.goalSelector.addGoal(2, new WaterAvoidingRandomStrollGoal(this, 1.0D));
+        this.goalSelector.addGoal(3, new LookAtPlayerGoal(this, Player.class, 8.0F));
+        this.goalSelector.addGoal(4, new RandomLookAroundGoal(this));
+    }
+
+    @Override
+    protected PathNavigation createNavigation(Level level) {
+        GroundPathNavigation nav = new GroundPathNavigation(this, level);
+        nav.setCanOpenDoors(true);
+        nav.setCanPassDoors(true);
+        nav.setCanFloat(true);
+        return nav;
     }
 
     public void setPreset(NpcPreset preset) {
@@ -218,6 +356,34 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         compound.putString("Head", this.entityData.get(HEAD));
         compound.putFloat("HitboxWidth", this.entityData.get(HITBOX_WIDTH));
         compound.putFloat("HitboxHeight", this.entityData.get(HITBOX_HEIGHT));
+        // Script system
+        compound.putString("ScriptType", this.entityData.get(SCRIPT_TYPE));
+        compound.putString("ScriptCommand", this.entityData.get(SCRIPT_COMMAND));
+        compound.putBoolean("InteractUsed", this.entityData.get(INTERACT_USED));
+        // AI and invulnerability
+        compound.putBoolean("AiEnabled", this.entityData.get(AI_ENABLED));
+        compound.putBoolean("NpcInvulnerable", this.entityData.get(INVULNERABLE));
+        // Player nearby
+        compound.putFloat("PlayerNearbyRadius", this.entityData.get(PLAYER_NEARBY_RADIUS));
+        compound.putBoolean("PlayerNearbyTriggered", this.entityData.get(PLAYER_NEARBY_TRIGGERED));
+        // Look-at system
+        compound.putBoolean("LookAtActive", this.entityData.get(LOOK_AT_ACTIVE));
+        compound.putBoolean("LookAtContinuous", this.entityData.get(LOOK_AT_CONTINUOUS));
+        compound.putFloat("LookAtTargetX", this.entityData.get(LOOK_AT_TARGET_X));
+        compound.putFloat("LookAtTargetY", this.entityData.get(LOOK_AT_TARGET_Y));
+        compound.putFloat("LookAtTargetZ", this.entityData.get(LOOK_AT_TARGET_Z));
+        compound.putInt("LookAtEntityId", this.entityData.get(LOOK_AT_ENTITY_ID));
+        // View range limits
+        compound.putFloat("ViewRangeMinYaw", this.entityData.get(VIEW_RANGE_MIN_YAW));
+        compound.putFloat("ViewRangeMaxYaw", this.entityData.get(VIEW_RANGE_MAX_YAW));
+        compound.putFloat("ViewRangeMinPitch", this.entityData.get(VIEW_RANGE_MIN_PITCH));
+        compound.putFloat("ViewRangeMaxPitch", this.entityData.get(VIEW_RANGE_MAX_PITCH));
+        // Movement system
+        compound.putString("MovementState", this.entityData.get(MOVEMENT_STATE));
+        compound.putFloat("MovementTargetX", this.entityData.get(MOVEMENT_TARGET_X));
+        compound.putFloat("MovementTargetY", this.entityData.get(MOVEMENT_TARGET_Y));
+        compound.putFloat("MovementTargetZ", this.entityData.get(MOVEMENT_TARGET_Z));
+        compound.putInt("MovementTargetEntityId", this.entityData.get(MOVEMENT_TARGET_ENTITY_ID));
     }
 
     @Override
@@ -272,6 +438,80 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         if (compound.contains("HitboxHeight")) {
             this.entityData.set(HITBOX_HEIGHT, compound.getFloat("HitboxHeight"));
         }
+        // Script system
+        if (compound.contains("ScriptType")) {
+            this.entityData.set(SCRIPT_TYPE, compound.getString("ScriptType"));
+        }
+        if (compound.contains("ScriptCommand")) {
+            this.entityData.set(SCRIPT_COMMAND, compound.getString("ScriptCommand"));
+        }
+        if (compound.contains("InteractUsed")) {
+            this.entityData.set(INTERACT_USED, compound.getBoolean("InteractUsed"));
+        }
+        // AI and invulnerability
+        if (compound.contains("AiEnabled")) {
+            boolean aiEnabled = compound.getBoolean("AiEnabled");
+            this.entityData.set(AI_ENABLED, aiEnabled);
+            this.setNoAi(!aiEnabled);
+        }
+        if (compound.contains("NpcInvulnerable")) {
+            this.entityData.set(INVULNERABLE, compound.getBoolean("NpcInvulnerable"));
+        }
+        // Player nearby
+        if (compound.contains("PlayerNearbyRadius")) {
+            this.entityData.set(PLAYER_NEARBY_RADIUS, compound.getFloat("PlayerNearbyRadius"));
+        }
+        if (compound.contains("PlayerNearbyTriggered")) {
+            this.entityData.set(PLAYER_NEARBY_TRIGGERED, compound.getBoolean("PlayerNearbyTriggered"));
+        }
+        // Look-at system
+        if (compound.contains("LookAtActive")) {
+            this.entityData.set(LOOK_AT_ACTIVE, compound.getBoolean("LookAtActive"));
+        }
+        if (compound.contains("LookAtContinuous")) {
+            this.entityData.set(LOOK_AT_CONTINUOUS, compound.getBoolean("LookAtContinuous"));
+        }
+        if (compound.contains("LookAtTargetX")) {
+            this.entityData.set(LOOK_AT_TARGET_X, compound.getFloat("LookAtTargetX"));
+        }
+        if (compound.contains("LookAtTargetY")) {
+            this.entityData.set(LOOK_AT_TARGET_Y, compound.getFloat("LookAtTargetY"));
+        }
+        if (compound.contains("LookAtTargetZ")) {
+            this.entityData.set(LOOK_AT_TARGET_Z, compound.getFloat("LookAtTargetZ"));
+        }
+        if (compound.contains("LookAtEntityId")) {
+            this.entityData.set(LOOK_AT_ENTITY_ID, compound.getInt("LookAtEntityId"));
+        }
+        // View range limits
+        if (compound.contains("ViewRangeMinYaw")) {
+            this.entityData.set(VIEW_RANGE_MIN_YAW, compound.getFloat("ViewRangeMinYaw"));
+        }
+        if (compound.contains("ViewRangeMaxYaw")) {
+            this.entityData.set(VIEW_RANGE_MAX_YAW, compound.getFloat("ViewRangeMaxYaw"));
+        }
+        if (compound.contains("ViewRangeMinPitch")) {
+            this.entityData.set(VIEW_RANGE_MIN_PITCH, compound.getFloat("ViewRangeMinPitch"));
+        }
+        if (compound.contains("ViewRangeMaxPitch")) {
+            this.entityData.set(VIEW_RANGE_MAX_PITCH, compound.getFloat("ViewRangeMaxPitch"));
+        }
+        // Movement system
+        if (compound.contains("MovementState")) {
+            this.entityData.set(MOVEMENT_STATE, compound.getString("MovementState"));
+        }
+        if (compound.contains("MovementTargetX")) {
+            this.entityData.set(MOVEMENT_TARGET_X, compound.getFloat("MovementTargetX"));
+        }
+        if (compound.contains("MovementTargetY")) {
+            this.entityData.set(MOVEMENT_TARGET_Y, compound.getFloat("MovementTargetY"));
+        }
+        if (compound.contains("MovementTargetZ")) {
+            this.entityData.set(MOVEMENT_TARGET_Z, compound.getFloat("MovementTargetZ"));
+        }
+        if (compound.contains("MovementTargetEntityId")) {
+            this.entityData.set(MOVEMENT_TARGET_ENTITY_ID, compound.getInt("MovementTargetEntityId"));
+        }
         this.refreshDimensions();
     }
 
@@ -288,8 +528,6 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
     }
 
     private PlayState predicate(AnimationState<NpcEntity> state) {
-        String idleAnim = this.entityData.get(IDLE_ANIM_NAME);
-        String walkAnim = this.entityData.get(WALK_ANIM_NAME);
         String deathAnim = this.entityData.get(DEATH_ANIM_NAME);
 
         // Play death animation if dead
@@ -298,10 +536,42 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
             return PlayState.CONTINUE;
         }
 
+        // Check for custom animation
+        String customAnim = this.entityData.get(CUSTOM_ANIMATION);
+        String customMode = this.entityData.get(CUSTOM_ANIMATION_MODE);
+        if (!customAnim.isEmpty() && !customMode.isEmpty()) {
+            switch (customMode) {
+                case "loop":
+                    state.getController().setAnimation(RawAnimation.begin().thenLoop(customAnim));
+                    break;
+                case "hold":
+                    state.getController().setAnimation(RawAnimation.begin().thenPlayAndHold(customAnim));
+                    break;
+                case "once":
+                    // Only set the animation if it's different from what we last played
+                    if (!customAnim.equals(lastPlayedOnceAnimation)) {
+                        state.getController().setAnimation(RawAnimation.begin().thenPlay(customAnim));
+                        lastPlayedOnceAnimation = customAnim;
+                    } else if (state.getController().getAnimationState() == AnimationController.State.STOPPED) {
+                        // Animation finished playing - call stopAnimation to properly clean up
+                        lastPlayedOnceAnimation = "";
+                        stopAnimation();
+                        // Fall through to normal animations below
+                        break;
+                    }
+                    break;
+            }
+            // Only return if we're still playing custom animation
+            if (!this.entityData.get(CUSTOM_ANIMATION).isEmpty()) {
+                return PlayState.CONTINUE;
+            }
+        }
+
+        // Normal movement animations
         if (state.isMoving()) {
-            state.getController().setAnimation(RawAnimation.begin().thenLoop(walkAnim));
+            state.getController().setAnimation(RawAnimation.begin().thenLoop(this.entityData.get(WALK_ANIM_NAME)));
         } else {
-            state.getController().setAnimation(RawAnimation.begin().thenLoop(idleAnim));
+            state.getController().setAnimation(RawAnimation.begin().thenLoop(this.entityData.get(IDLE_ANIM_NAME)));
         }
         return PlayState.CONTINUE;
     }
@@ -326,8 +596,471 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         return this.entityData.get(DEATH_DURATION);
     }
 
+    // Script system methods
+    public void setScript(String type, String command) {
+        this.entityData.set(SCRIPT_TYPE, type != null ? type : "");
+        this.entityData.set(SCRIPT_COMMAND, command != null ? command : "");
+        // Reset interact used flag when script is set/updated
+        this.entityData.set(INTERACT_USED, false);
+    }
+
+    public String getScriptType() {
+        return this.entityData.get(SCRIPT_TYPE);
+    }
+
+    public String getScriptCommand() {
+        return this.entityData.get(SCRIPT_COMMAND);
+    }
+
+    public boolean hasInteractScript() {
+        return "interact".equals(getScriptType()) && !getScriptCommand().isEmpty();
+    }
+
+    public boolean hasDefaultScript() {
+        return "default".equals(getScriptType()) && !getScriptCommand().isEmpty();
+    }
+
+    public boolean isInteractUsed() {
+        return this.entityData.get(INTERACT_USED);
+    }
+
+    public void setInteractUsed(boolean used) {
+        this.entityData.set(INTERACT_USED, used);
+    }
+
     @Override
     public AnimatableInstanceCache getAnimatableInstanceCache() {
         return cache;
+    }
+
+    // AI control methods
+    public boolean isAiEnabled() {
+        return this.entityData.get(AI_ENABLED);
+    }
+
+    public void setAiEnabled(boolean enabled) {
+        this.entityData.set(AI_ENABLED, enabled);
+        this.setNoAi(!enabled);
+    }
+
+    // Invulnerability methods
+    public boolean isNpcInvulnerable() {
+        return this.entityData.get(INVULNERABLE);
+    }
+
+    public void setNpcInvulnerable(boolean invulnerable) {
+        this.entityData.set(INVULNERABLE, invulnerable);
+    }
+
+    @Override
+    public boolean hurt(DamageSource source, float amount) {
+        if (this.entityData.get(INVULNERABLE)) {
+            return false;
+        }
+        return super.hurt(source, amount);
+    }
+
+    // Player nearby event methods
+    public float getPlayerNearbyRadius() {
+        return this.entityData.get(PLAYER_NEARBY_RADIUS);
+    }
+
+    public void setPlayerNearbyRadius(float radius) {
+        this.entityData.set(PLAYER_NEARBY_RADIUS, radius);
+        // Reset triggered flag when radius is changed
+        this.entityData.set(PLAYER_NEARBY_TRIGGERED, false);
+    }
+
+    public boolean isPlayerNearbyTriggered() {
+        return this.entityData.get(PLAYER_NEARBY_TRIGGERED);
+    }
+
+    public void setPlayerNearbyTriggered(boolean triggered) {
+        this.entityData.set(PLAYER_NEARBY_TRIGGERED, triggered);
+    }
+
+    public boolean hasPlayerNearbyScript() {
+        String scriptType = getScriptType();
+        return scriptType.startsWith("player_nearby") && !getScriptCommand().isEmpty();
+    }
+
+    public float getPlayerNearbyScriptRadius() {
+        String scriptType = getScriptType();
+        if (scriptType.startsWith("player_nearby")) {
+            // Parse radius from "player_nearby 5" format
+            String[] parts = scriptType.split(" ");
+            if (parts.length >= 2) {
+                try {
+                    return Float.parseFloat(parts[1]);
+                } catch (NumberFormatException e) {
+                    return 5.0f; // default radius
+                }
+            }
+            return 5.0f; // default radius
+        }
+        return 0.0f;
+    }
+
+    // ===== Movement system methods =====
+
+    public String getMovementState() {
+        return this.entityData.get(MOVEMENT_STATE);
+    }
+
+    public void setMovementState(String state) {
+        this.entityData.set(MOVEMENT_STATE, state != null ? state : "idle");
+    }
+
+    // Movement target accessors
+    public float getMovementTargetX() {
+        return this.entityData.get(MOVEMENT_TARGET_X);
+    }
+
+    public float getMovementTargetY() {
+        return this.entityData.get(MOVEMENT_TARGET_Y);
+    }
+
+    public float getMovementTargetZ() {
+        return this.entityData.get(MOVEMENT_TARGET_Z);
+    }
+
+    public void setMovementTarget(double x, double y, double z) {
+        this.entityData.set(MOVEMENT_TARGET_X, (float) x);
+        this.entityData.set(MOVEMENT_TARGET_Y, (float) y);
+        this.entityData.set(MOVEMENT_TARGET_Z, (float) z);
+    }
+
+    public int getMovementTargetEntityId() {
+        return this.entityData.get(MOVEMENT_TARGET_ENTITY_ID);
+    }
+
+    public void setMovementTargetEntityId(int id) {
+        this.entityData.set(MOVEMENT_TARGET_ENTITY_ID, id);
+    }
+
+    // Patrol accessors
+    public String getPatrolPoints() {
+        return this.entityData.get(PATROL_POINTS);
+    }
+
+    public void setPatrolPoints(String points) {
+        this.entityData.set(PATROL_POINTS, points != null ? points : "");
+    }
+
+    public int getPatrolIndex() {
+        return this.entityData.get(PATROL_INDEX);
+    }
+
+    public void setPatrolIndex(int index) {
+        this.entityData.set(PATROL_INDEX, index);
+    }
+
+    // Wander accessors
+    public String getWanderPolygon() {
+        return this.entityData.get(WANDER_POLYGON);
+    }
+
+    public void setWanderPolygon(String polygon) {
+        this.entityData.set(WANDER_POLYGON, polygon != null ? polygon : "");
+    }
+
+    public float getWanderY() {
+        return this.entityData.get(WANDER_Y);
+    }
+
+    public void setWanderY(float y) {
+        this.entityData.set(WANDER_Y, y);
+    }
+
+    // Directional movement accessors
+    public float getDirectionalRemaining() {
+        return this.entityData.get(DIRECTIONAL_REMAINING);
+    }
+
+    public void setDirectionalRemaining(float remaining) {
+        this.entityData.set(DIRECTIONAL_REMAINING, remaining);
+    }
+
+    public void setDirectionalVector(float x, float z) {
+        this.entityData.set(DIRECTIONAL_VEC_X, x);
+        this.entityData.set(DIRECTIONAL_VEC_Z, z);
+    }
+
+    public boolean isMovementActive() {
+        return movementHandler.isMovementActive();
+    }
+
+    /**
+     * Moves NPC to a specific position using pathfinding.
+     * NPC will open doors and use ladders.
+     */
+    public void moveToPosition(double x, double y, double z) {
+        movementHandler.moveToPosition(x, y, z);
+    }
+
+    /**
+     * Stops all movement and resets movement state.
+     */
+    public void stopMovement() {
+        movementHandler.stopMovement();
+    }
+
+    /**
+     * Starts patrol movement between specified points.
+     * Points are stored as JSON array: [[x1,y1,z1],[x2,y2,z2],...]
+     */
+    public void startPatrol(java.util.List<net.minecraft.core.BlockPos> points) {
+        movementHandler.startPatrol(points);
+    }
+
+    /**
+     * Starts following an entity.
+     */
+    public void startFollow(net.minecraft.world.entity.Entity target) {
+        movementHandler.startFollow(target);
+    }
+
+    /**
+     * Starts directional movement (forward/backward/left/right) for specified distance.
+     * @param direction "forward", "backward", "left", or "right"
+     * @param distance Distance in blocks
+     */
+    public void startDirectionalMovement(String direction, float distance) {
+        movementHandler.startDirectionalMovement(direction, distance);
+    }
+
+    /**
+     * Starts wander movement within a circular radius around a center point.
+     * @param centerX Center X coordinate
+     * @param centerY Center Y coordinate (used for wander target height)
+     * @param centerZ Center Z coordinate
+     * @param radius Radius to wander within
+     */
+    public void startWander(double centerX, double centerY, double centerZ, float radius) {
+        movementHandler.startWander(centerX, centerY, centerZ, radius);
+    }
+
+    // ===== Custom animation methods =====
+
+    /**
+     * Plays a custom animation on the NPC.
+     * @param animationName The name of the animation to play
+     * @param mode The play mode: "once" (play once then return to idle), "loop" (loop forever), "hold" (play and hold last frame)
+     */
+    public void playAnimation(String animationName, String mode) {
+        // Reset tracking to allow replaying the same animation
+        this.lastPlayedOnceAnimation = "";
+        this.entityData.set(CUSTOM_ANIMATION, animationName != null ? animationName : "");
+        this.entityData.set(CUSTOM_ANIMATION_MODE, mode != null ? mode : "once");
+    }
+
+    /**
+     * Stops the current custom animation and returns to normal idle/walk animations.
+     */
+    public void stopAnimation() {
+        this.entityData.set(CUSTOM_ANIMATION, "");
+        this.entityData.set(CUSTOM_ANIMATION_MODE, "");
+    }
+
+    /**
+     * Gets the currently playing custom animation name.
+     */
+    public String getCustomAnimation() {
+        return this.entityData.get(CUSTOM_ANIMATION);
+    }
+
+    /**
+     * Gets the current custom animation mode.
+     */
+    public String getCustomAnimationMode() {
+        return this.entityData.get(CUSTOM_ANIMATION_MODE);
+    }
+
+    // ===== Look-at system methods =====
+
+    public boolean isLookAtActive() {
+        return this.entityData.get(LOOK_AT_ACTIVE);
+    }
+
+    public void setLookAtActive(boolean active) {
+        this.entityData.set(LOOK_AT_ACTIVE, active);
+    }
+
+    public boolean isLookAtContinuous() {
+        return this.entityData.get(LOOK_AT_CONTINUOUS);
+    }
+
+    public void setLookAtContinuous(boolean continuous) {
+        this.entityData.set(LOOK_AT_CONTINUOUS, continuous);
+    }
+
+    public int getLookAtEntityId() {
+        return this.entityData.get(LOOK_AT_ENTITY_ID);
+    }
+
+    public void setLookAtEntityId(int entityId) {
+        this.entityData.set(LOOK_AT_ENTITY_ID, entityId);
+    }
+
+    // Look-at target position accessors
+    public float getLookAtTargetX() {
+        return this.entityData.get(LOOK_AT_TARGET_X);
+    }
+
+    public float getLookAtTargetY() {
+        return this.entityData.get(LOOK_AT_TARGET_Y);
+    }
+
+    public float getLookAtTargetZ() {
+        return this.entityData.get(LOOK_AT_TARGET_Z);
+    }
+
+    public void setLookAtTargetPosition(float x, float y, float z) {
+        this.entityData.set(LOOK_AT_TARGET_X, x);
+        this.entityData.set(LOOK_AT_TARGET_Y, y);
+        this.entityData.set(LOOK_AT_TARGET_Z, z);
+    }
+
+    /**
+     * Sets up the look-at target to specific coordinates.
+     */
+    public void setLookAtTarget(double x, double y, double z, boolean continuous) {
+        this.entityData.set(LOOK_AT_TARGET_X, (float) x);
+        this.entityData.set(LOOK_AT_TARGET_Y, (float) y);
+        this.entityData.set(LOOK_AT_TARGET_Z, (float) z);
+        this.entityData.set(LOOK_AT_ENTITY_ID, -1); // No entity target
+        this.entityData.set(LOOK_AT_CONTINUOUS, continuous);
+        this.entityData.set(LOOK_AT_ACTIVE, true);
+    }
+
+    /**
+     * Sets up the look-at target to follow an entity.
+     */
+    public void setLookAtTarget(net.minecraft.world.entity.Entity target, boolean continuous) {
+        this.entityData.set(LOOK_AT_TARGET_X, (float) target.getX());
+        this.entityData.set(LOOK_AT_TARGET_Y, (float) target.getEyeY());
+        this.entityData.set(LOOK_AT_TARGET_Z, (float) target.getZ());
+        this.entityData.set(LOOK_AT_ENTITY_ID, target.getId());
+        this.entityData.set(LOOK_AT_CONTINUOUS, continuous);
+        this.entityData.set(LOOK_AT_ACTIVE, true);
+    }
+
+    /**
+     * Stops the look-at behavior.
+     */
+    public void stopLookAt() {
+        this.entityData.set(LOOK_AT_ACTIVE, false);
+        this.entityData.set(LOOK_AT_ENTITY_ID, -1);
+    }
+
+    // ===== View range methods =====
+
+    public float getViewRangeMinYaw() {
+        return this.entityData.get(VIEW_RANGE_MIN_YAW);
+    }
+
+    public float getViewRangeMaxYaw() {
+        return this.entityData.get(VIEW_RANGE_MAX_YAW);
+    }
+
+    public float getViewRangeMinPitch() {
+        return this.entityData.get(VIEW_RANGE_MIN_PITCH);
+    }
+
+    public float getViewRangeMaxPitch() {
+        return this.entityData.get(VIEW_RANGE_MAX_PITCH);
+    }
+
+    /**
+     * Sets the view range limits for the NPC.
+     * @param minYaw Minimum yaw angle (-180 to 180)
+     * @param maxYaw Maximum yaw angle (-180 to 180)
+     * @param minPitch Minimum pitch angle (-90 to 90)
+     * @param maxPitch Maximum pitch angle (-90 to 90)
+     */
+    public void setViewRange(float minYaw, float maxYaw, float minPitch, float maxPitch) {
+        this.entityData.set(VIEW_RANGE_MIN_YAW, minYaw);
+        this.entityData.set(VIEW_RANGE_MAX_YAW, maxYaw);
+        this.entityData.set(VIEW_RANGE_MIN_PITCH, minPitch);
+        this.entityData.set(VIEW_RANGE_MAX_PITCH, maxPitch);
+    }
+
+    /**
+     * Resets view range to default (no limits).
+     */
+    public void resetViewRange() {
+        this.entityData.set(VIEW_RANGE_MIN_YAW, -180.0f);
+        this.entityData.set(VIEW_RANGE_MAX_YAW, 180.0f);
+        this.entityData.set(VIEW_RANGE_MIN_PITCH, -90.0f);
+        this.entityData.set(VIEW_RANGE_MAX_PITCH, 90.0f);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+
+        // Check player_nearby event (server side only)
+        if (!this.level().isClientSide() && hasPlayerNearbyScript() && !isPlayerNearbyTriggered()) {
+            float radius = getPlayerNearbyScriptRadius();
+            if (radius > 0) {
+                Player nearestPlayer = this.level().getNearestPlayer(this, radius);
+                if (nearestPlayer != null) {
+                    // Mark as triggered to prevent repeated execution
+                    setPlayerNearbyTriggered(true);
+                    // Execute the script
+                    executeScript(nearestPlayer);
+                }
+            }
+        }
+
+        // Process look-at behavior (server side only)
+        if (!this.level().isClientSide()) {
+            lookHandler.tick();
+        }
+
+        // Process movement behavior (server side only)
+        if (!this.level().isClientSide()) {
+            movementHandler.tick();
+        }
+    }
+
+    /**
+     * Executes the NPC's script command with placeholder replacements.
+     */
+    public void executeScript(@Nullable Player triggeringPlayer) {
+        String command = getScriptCommand();
+        if (command == null || command.isEmpty()) {
+            return;
+        }
+
+        if (!(this.level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
+            return;
+        }
+
+        net.minecraft.server.MinecraftServer server = serverLevel.getServer();
+        if (server == null) {
+            return;
+        }
+
+        // Replace placeholders
+        command = command
+                .replace("{npc}", getCustomId())
+                .replace("{x}", String.valueOf((int) getX()))
+                .replace("{y}", String.valueOf((int) getY()))
+                .replace("{z}", String.valueOf((int) getZ()));
+
+        if (triggeringPlayer != null) {
+            command = command.replace("{player}", triggeringPlayer.getName().getString());
+        }
+
+        // Execute command from server console
+        try {
+            server.getCommands().performPrefixedCommand(
+                    server.createCommandSourceStack(),
+                    command
+            );
+        } catch (Exception e) {
+            dcs.jagermeistars.talesmaker.TalesMaker.LOGGER.error("Failed to execute NPC script for '{}': {}", getCustomId(), command, e);
+        }
     }
 }

@@ -14,7 +14,12 @@
       "Bash(del \"c:\\Users\\konst\\Jager.DCS\\TalesMaker\\src\\main\\java\\dcs\\jagermeistars\\talesmaker\\network\\ResourceValidationResponsePacket.java\")",
       "Bash(cd:*)",
       "Bash(.gradlew.bat build)",
-      "Bash(gradlew.bat build:*)"
+      "Bash(gradlew.bat build:*)",
+      "Bash(xargs:*)",
+      "Bash(dir:*)",
+      "Bash(./gradlew.bat build:*)",
+      "Bash(c:)",
+      "Bash(del \"c:\\Users\\konst\\Jager.DCS\\TalesMaker\\src\\main\\java\\dcs\\jagermeistars\\talesmaker\\entity\\NpcMovementHandler.java\")"
     ],
     "deny": [],
     "ask": []
