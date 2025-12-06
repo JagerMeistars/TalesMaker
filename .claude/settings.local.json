@@ -1,25 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(tree:*)",
-      "Bash(.gradlew build:*)",
-      "Bash(cmd /c \"cd /d c:\\Users\\konst\\Jager.DCS\\TalesMaker && gradlew.bat build\")",
-      "Bash(cmd /c \"cd /d c:\\Users\\konst\\Jager.DCS\\TalesMaker && call gradlew.bat build\")",
-      "Bash(powershell -Command \"Set-Location ''c:\\Users\\konst\\Jager.DCS\\TalesMaker''; .\\gradlew.bat build\")",
-      "Bash(./gradlew build:*)",
-      "Bash(./gradlew runClient:*)",
-      "Bash(cmd /c \"cd /d c:\\Users\\konst\\Jager.DCS\\TalesMaker && gradlew.bat build 2>&1\")",
-      "Bash(powershell -Command \"Set-Location ''c:\\Users\\konst\\Jager.DCS\\TalesMaker''; .\\gradlew.bat build 2>&1\")",
-      "Bash(del \"c:\\Users\\konst\\Jager.DCS\\TalesMaker\\src\\main\\java\\dcs\\jagermeistars\\talesmaker\\network\\ValidateResourcesPacket.java\")",
-      "Bash(del \"c:\\Users\\konst\\Jager.DCS\\TalesMaker\\src\\main\\java\\dcs\\jagermeistars\\talesmaker\\network\\ResourceValidationResponsePacket.java\")",
-      "Bash(cd:*)",
-      "Bash(.gradlew.bat build)",
-      "Bash(gradlew.bat build:*)",
-      "Bash(xargs:*)",
-      "Bash(dir:*)",
-      "Bash(./gradlew.bat build:*)",
-      "Bash(c:)",
-      "Bash(del \"c:\\Users\\konst\\Jager.DCS\\TalesMaker\\src\\main\\java\\dcs\\jagermeistars\\talesmaker\\entity\\NpcMovementHandler.java\")"
+      "Bash(rm:*)",
+      "Bash(mkdir:*)",
+      "Bash(./gradlew build:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,6 +1,8 @@
 package dcs.jagermeistars.talesmaker.entity;
 
 import dcs.jagermeistars.talesmaker.data.NpcPreset;
+import dcs.jagermeistars.talesmaker.pathfinding.NpcPathingBehavior;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -22,6 +24,7 @@ import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.phys.Vec3;
 import javax.annotation.Nullable;
 import net.minecraft.world.level.Level;
 import software.bernie.geckolib.animatable.GeoEntity;
@@ -143,13 +146,13 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
     private String lastPlayedOnceAnimation = ""; // Track which "once" animation was played to detect completion
 
     // Handlers
-    private final NpcMovementHandler movementHandler;
     private final NpcLookHandler lookHandler;
+    private final NpcPathingBehavior pathingBehavior;
 
     public NpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
-        this.movementHandler = new NpcMovementHandler(this);
         this.lookHandler = new NpcLookHandler(this);
+        this.pathingBehavior = new NpcPathingBehavior(this);
         // AI is disabled by default
         this.setNoAi(true);
     }
@@ -786,58 +789,92 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         this.entityData.set(DIRECTIONAL_VEC_Z, z);
     }
 
+    // ===== Movement system methods (using NpcPathingBehavior) =====
+
     public boolean isMovementActive() {
-        return movementHandler.isMovementActive();
+        return pathingBehavior.isActive();
     }
 
-    /**
-     * Moves NPC to a specific position using pathfinding.
-     * NPC will open doors and use ladders.
-     */
     public void moveToPosition(double x, double y, double z) {
-        movementHandler.moveToPosition(x, y, z);
+        setMovementState("goto");
+        setMovementTarget(x, y, z);
+        pathingBehavior.moveToPosition(new BlockPos((int) x, (int) y, (int) z));
     }
 
-    /**
-     * Stops all movement and resets movement state.
-     */
     public void stopMovement() {
-        movementHandler.stopMovement();
+        setMovementState("idle");
+        pathingBehavior.stop();
+        getNavigation().stop();
     }
 
-    /**
-     * Starts patrol movement between specified points.
-     * Points are stored as JSON array: [[x1,y1,z1],[x2,y2,z2],...]
-     */
-    public void startPatrol(java.util.List<net.minecraft.core.BlockPos> points) {
-        movementHandler.startPatrol(points);
+    public void startPatrol(java.util.List<BlockPos> points) {
+        if (points == null || points.isEmpty()) {
+            return;
+        }
+        setMovementState("patrol");
+        pathingBehavior.startPatrol(points);
     }
 
-    /**
-     * Starts following an entity.
-     */
     public void startFollow(net.minecraft.world.entity.Entity target) {
-        movementHandler.startFollow(target);
+        if (target == null) {
+            return;
+        }
+        setMovementState("follow");
+        setMovementTargetEntityId(target.getId());
+        pathingBehavior.startFollow(target);
     }
 
-    /**
-     * Starts directional movement (forward/backward/left/right) for specified distance.
-     * @param direction "forward", "backward", "left", or "right"
-     * @param distance Distance in blocks
-     */
+    public void startFollow(net.minecraft.world.entity.Entity target, int minDistance, int maxDistance) {
+        if (target == null) {
+            return;
+        }
+        setMovementState("follow");
+        setMovementTargetEntityId(target.getId());
+        pathingBehavior.startFollow(target, minDistance, maxDistance);
+    }
+
     public void startDirectionalMovement(String direction, float distance) {
-        movementHandler.startDirectionalMovement(direction, distance);
+        // Calculate target position based on direction
+        double x = getX();
+        double z = getZ();
+        float yaw = getYRot();
+
+        switch (direction.toLowerCase()) {
+            case "forward":
+                x -= Math.sin(Math.toRadians(yaw)) * distance;
+                z += Math.cos(Math.toRadians(yaw)) * distance;
+                break;
+            case "backward":
+                x += Math.sin(Math.toRadians(yaw)) * distance;
+                z -= Math.cos(Math.toRadians(yaw)) * distance;
+                break;
+            case "left":
+                x -= Math.sin(Math.toRadians(yaw - 90)) * distance;
+                z += Math.cos(Math.toRadians(yaw - 90)) * distance;
+                break;
+            case "right":
+                x -= Math.sin(Math.toRadians(yaw + 90)) * distance;
+                z += Math.cos(Math.toRadians(yaw + 90)) * distance;
+                break;
+            default:
+                return;
+        }
+
+        setMovementState("directional");
+        moveToPosition(x, getY(), z);
+    }
+
+    public void startWander(double centerX, double centerY, double centerZ, float radius) {
+        setMovementState("wander");
+        setWanderY((float) centerY);
+        pathingBehavior.startWander(new BlockPos((int) centerX, (int) centerY, (int) centerZ), (int) radius);
     }
 
     /**
-     * Starts wander movement within a circular radius around a center point.
-     * @param centerX Center X coordinate
-     * @param centerY Center Y coordinate (used for wander target height)
-     * @param centerZ Center Z coordinate
-     * @param radius Radius to wander within
+     * Get the pathfinding behavior controller.
      */
-    public void startWander(double centerX, double centerY, double centerZ, float radius) {
-        movementHandler.startWander(centerX, centerY, centerZ, radius);
+    public NpcPathingBehavior getPathingBehavior() {
+        return pathingBehavior;
     }
 
     // ===== Custom animation methods =====
@@ -1018,9 +1055,37 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
             lookHandler.tick();
         }
 
-        // Process movement behavior (server side only)
+        // Process pathfinding behavior (server side only)
         if (!this.level().isClientSide()) {
-            movementHandler.tick();
+            pathingBehavior.tick();
+        }
+    }
+
+    @Override
+    public void aiStep() {
+        // Always call super to process physics, gravity, and movement
+        // even when noAi is true (which normally skips most of aiStep)
+        super.aiStep();
+
+        // When AI is disabled but we're pathfinding, we need to manually
+        // apply movement since vanilla skips it for noAi entities
+        if (this.isNoAi() && pathingBehavior.isActive()) {
+            // Apply gravity
+            if (!this.onGround() && !this.isInWater()) {
+                this.setDeltaMovement(this.getDeltaMovement().add(0, -0.08, 0));
+            }
+
+            // Apply friction/drag
+            Vec3 velocity = this.getDeltaMovement();
+            if (this.onGround()) {
+                velocity = velocity.multiply(0.91, 1.0, 0.91);
+            } else {
+                velocity = velocity.multiply(0.91, 0.98, 0.91);
+            }
+            this.setDeltaMovement(velocity);
+
+            // Actually move the entity
+            this.move(net.minecraft.world.entity.MoverType.SELF, this.getDeltaMovement());
         }
     }
 
