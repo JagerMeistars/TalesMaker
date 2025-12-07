@@ -64,7 +64,7 @@ public class MovementDiagonal extends Movement {
                 return MovementResult.IN_PROGRESS;
 
             case RUNNING:
-                Vec3 targetPos = Vec3.atBottomCenterOf(dest);
+                Vec3 targetPos = MovementHelper.calculateTargetPosition(ctx, src, dest);
 
                 if (MovementHelper.hasReachedXZ(ctx.getEntity(), targetPos, REACH_THRESHOLD_SQ)) {
                     setState(MovementState.COMPLETE);

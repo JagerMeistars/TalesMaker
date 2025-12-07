@@ -52,7 +52,7 @@ public class MovementTraverse extends Movement {
                 return MovementResult.IN_PROGRESS;
 
             case RUNNING:
-                Vec3 targetPos = Vec3.atBottomCenterOf(dest);
+                Vec3 targetPos = MovementHelper.calculateTargetPosition(ctx, src, dest);
                 Vec3 currentPos = ctx.getPosition();
 
                 // Debug every 10 ticks

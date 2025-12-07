@@ -71,7 +71,7 @@ public class MovementFall extends Movement {
                 return MovementResult.IN_PROGRESS;
 
             case RUNNING:
-                Vec3 targetPos = Vec3.atBottomCenterOf(dest);
+                Vec3 targetPos = MovementHelper.calculateTargetPosition(ctx, src, dest);
 
                 // Check if we've reached the destination
                 if (MovementHelper.hasReachedXZ(ctx.getEntity(), targetPos, REACH_THRESHOLD_SQ) && ctx.isOnGround()) {

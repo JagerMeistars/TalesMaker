@@ -1,7 +1,10 @@
 package dcs.jagermeistars.talesmaker.pathfinding.movement;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -243,5 +246,71 @@ public final class MovementHelper {
             }
         }
         return 0.0;
+    }
+
+    /**
+     * Calculates the optimal target position for an NPC considering its width.
+     * For wide NPCs, centers them in the passage to avoid wall collisions.
+     * For narrow NPCs, uses standard block center.
+     *
+     * @param ctx  movement context
+     * @param src  source position
+     * @param dest destination position
+     * @return Vec3 with optimal coordinates
+     */
+    public static Vec3 calculateTargetPosition(MovementContext ctx, BlockPos src, BlockPos dest) {
+        float entityWidth = ctx.getConfig().getEntityWidth();
+
+        double x = PassageAnalyzer.calculateOptimalX(ctx, src, dest, entityWidth);
+        double z = PassageAnalyzer.calculateOptimalZ(ctx, src, dest, entityWidth);
+        double y = dest.getY();
+
+        return new Vec3(x, y, z);
+    }
+
+    /**
+     * Calculates the target position when moving through a door,
+     * accounting for door hitbox offset.
+     *
+     * @param ctx     movement context
+     * @param src     source position
+     * @param dest    destination position
+     * @param doorPos position of the door block
+     * @return Vec3 with optimal coordinates adjusted for door hitbox
+     */
+    public static Vec3 calculateTargetPositionThroughDoor(
+            MovementContext ctx,
+            BlockPos src,
+            BlockPos dest,
+            BlockPos doorPos
+    ) {
+        Vec3 baseTarget = calculateTargetPosition(ctx, src, dest);
+
+        BlockState doorState = ctx.getBlockState(doorPos);
+        Direction moveDir = getMovementDirection(src, dest);
+        double doorOffset = PassageAnalyzer.getDoorOffset(doorState, moveDir);
+
+        if (moveDir.getAxis() == Direction.Axis.X) {
+            return baseTarget.add(0, 0, doorOffset);
+        } else {
+            return baseTarget.add(doorOffset, 0, 0);
+        }
+    }
+
+    /**
+     * Determines the primary direction of movement between two positions.
+     *
+     * @param from source position
+     * @param to   destination position
+     * @return the primary direction of movement
+     */
+    public static Direction getMovementDirection(BlockPos from, BlockPos to) {
+        int dx = to.getX() - from.getX();
+        int dz = to.getZ() - from.getZ();
+        if (Math.abs(dx) > Math.abs(dz)) {
+            return dx > 0 ? Direction.EAST : Direction.WEST;
+        } else {
+            return dz > 0 ? Direction.SOUTH : Direction.NORTH;
+        }
     }
 }

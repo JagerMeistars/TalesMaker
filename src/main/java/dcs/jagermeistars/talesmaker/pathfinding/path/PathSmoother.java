@@ -2,7 +2,10 @@ package dcs.jagermeistars.talesmaker.pathfinding.path;
 
 import dcs.jagermeistars.talesmaker.pathfinding.context.WorldContext;
 import dcs.jagermeistars.talesmaker.pathfinding.config.PathingConfig;
+import dcs.jagermeistars.talesmaker.pathfinding.movement.PassageAnalyzer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -32,25 +35,181 @@ public final class PathSmoother {
      */
     public static SmoothPath smooth(IPath path, WorldContext context, PathingConfig config) {
         if (path == null || path.length() <= 2) {
+            // For short paths, still apply centering for wide NPCs
+            if (path != null && config.getEntityWidth() > 1.0f) {
+                return smoothShortPath(path, context, config);
+            }
             return path != null ? SmoothPath.fromPath(path) : null;
         }
 
         List<BlockPos> original = path.positions();
         List<Vec3> smoothed = new ArrayList<>();
+        float entityWidth = config.getEntityWidth();
 
-        // Always include start
-        smoothed.add(Vec3.atBottomCenterOf(original.get(0)));
+        // Always include start - use centered position for wide NPCs
+        smoothed.add(calculateWaypointPosition(original.get(0), null, context, config));
 
         int currentIndex = 0;
         while (currentIndex < original.size() - 1) {
             // Find the farthest point we can reach directly
             int farthestVisible = findFarthestVisible(original, currentIndex, context, config);
 
-            // Add the farthest visible point
+            // Add the farthest visible point with proper centering
+            BlockPos prevPos = original.get(currentIndex);
             BlockPos target = original.get(farthestVisible);
-            smoothed.add(Vec3.atBottomCenterOf(target));
+            smoothed.add(calculateWaypointPosition(target, prevPos, context, config));
 
             currentIndex = farthestVisible;
+        }
+
+        return new SmoothPath(smoothed, path.getGoal(), path.getTotalCost(), path.isComplete());
+    }
+
+    /**
+     * Calculate waypoint position with proper centering for wide NPCs.
+     * Uses PassageAnalyzer to find optimal position in passages.
+     *
+     * @param pos     target block position
+     * @param prevPos previous position (for movement direction), or null for start
+     * @param context world context
+     * @param config  pathing config
+     * @return Vec3 waypoint with proper centering
+     */
+    private static Vec3 calculateWaypointPosition(BlockPos pos, BlockPos prevPos,
+                                                   WorldContext context, PathingConfig config) {
+        float entityWidth = config.getEntityWidth();
+        float entityHeight = config.getEntityHeight();
+
+        // For narrow NPCs, use standard block center
+        if (entityWidth <= 1.0f) {
+            return Vec3.atBottomCenterOf(pos);
+        }
+
+        // For wide NPCs, calculate optimal centered position in passage
+        // Check passage width along both axes and center accordingly
+        double x = calculateCenteredCoordForPath(pos, Direction.Axis.X, entityWidth, entityHeight, context);
+        double z = calculateCenteredCoordForPath(pos, Direction.Axis.Z, entityWidth, entityHeight, context);
+        double y = pos.getY();
+
+        System.out.println("[PathSmoother] Wide NPC waypoint: pos=" + pos + " -> (" +
+            String.format("%.2f", x) + ", " + y + ", " + String.format("%.2f", z) +
+            ") entityWidth=" + entityWidth);
+
+        return new Vec3(x, y, z);
+    }
+
+    /**
+     * Calculate centered coordinate along an axis for path smoothing.
+     * For wide NPCs in narrow passages, centers the NPC in the passage.
+     *
+     * Key insight: For a passage of width N blocks and NPC width W:
+     * - If N == W (e.g., 2-block passage, 2-wide NPC), center must be at block boundary
+     * - We check for WALLS (solid blocks at entity height), not just headroom
+     */
+    private static double calculateCenteredCoordForPath(BlockPos pos, Direction.Axis axis,
+                                                         float entityWidth, float entityHeight,
+                                                         WorldContext context) {
+        double baseCoord = (axis == Direction.Axis.X) ? pos.getX() : pos.getZ();
+
+        // Find walls (solid blocks) on each side at entity's height level
+        // A wall is a block that would block passage (solid at y or y+1)
+        int wallNegative = findWallDistance(pos, axis, -1, entityHeight, context);
+        int wallPositive = findWallDistance(pos, axis, 1, entityHeight, context);
+
+        // Calculate passage boundaries (the last passable positions before walls)
+        // wallNegative is negative (e.g., -2 means wall at offset -2)
+        // wallPositive is positive (e.g., 2 means wall at offset +2)
+        double passageStart = baseCoord + wallNegative + 1; // +1 because wall itself is not passable
+        double passageEnd = baseCoord + wallPositive;       // wall position, passage ends before it
+
+        double passageWidth = passageEnd - passageStart;
+        double passageCenter = (passageStart + passageEnd) / 2.0;
+
+        System.out.println("[PathSmoother] axis=" + axis + " pos=" +
+            (axis == Direction.Axis.X ? pos.getX() : pos.getZ()) +
+            " wallNeg=" + wallNegative + " wallPos=" + wallPositive +
+            " passageStart=" + passageStart + " passageEnd=" + passageEnd +
+            " passageWidth=" + passageWidth + " center=" + passageCenter);
+
+        return passageCenter;
+    }
+
+    /**
+     * Find distance to nearest wall in given direction.
+     * Returns the offset where a wall (solid block) is found.
+     *
+     * @param pos starting position
+     * @param axis axis to search along
+     * @param direction -1 for negative, +1 for positive
+     * @param entityHeight entity height for headroom check
+     * @param context world context
+     * @return offset where wall is found (negative for negative direction, positive for positive)
+     */
+    private static int findWallDistance(BlockPos pos, Direction.Axis axis, int direction,
+                                        float entityHeight, WorldContext context) {
+        for (int i = 1; i <= 10; i++) {
+            int offset = i * direction;
+            BlockPos checkPos = offsetByAxis(pos, axis, offset);
+
+            // Check if this position is blocked (wall)
+            // A wall is any block that blocks horizontal movement at ANY height level
+            // This includes bottom slabs, fences, walls, etc.
+            if (isHorizontallyBlocked(checkPos, entityHeight, context)) {
+                return offset;
+            }
+        }
+        // No wall found within range - return far boundary
+        return 10 * direction;
+    }
+
+    /**
+     * Check if a position is blocked for horizontal movement.
+     * Unlike hasHeadroom which checks vertical space, this checks if ANY solid
+     * block would prevent horizontal passage (including bottom slabs, fences, etc.)
+     */
+    private static boolean isHorizontallyBlocked(BlockPos pos, float entityHeight, WorldContext context) {
+        int fullBlocks = (int) Math.ceil(entityHeight);
+
+        // Check all blocks from feet to head level
+        for (int dy = 0; dy < fullBlocks; dy++) {
+            BlockState state = context.getBlockState(pos.getX(), pos.getY() + dy, pos.getZ());
+
+            // Air is never blocked
+            if (state.isAir()) {
+                continue;
+            }
+
+            // If block has any collision (blocksMotion), it's a wall
+            // This catches slabs, fences, walls, etc.
+            if (state.blocksMotion()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Helper method to offset a BlockPos along a specific axis.
+     */
+    private static BlockPos offsetByAxis(BlockPos pos, Direction.Axis axis, int offset) {
+        return switch (axis) {
+            case X -> pos.offset(offset, 0, 0);
+            case Y -> pos.offset(0, offset, 0);
+            case Z -> pos.offset(0, 0, offset);
+        };
+    }
+
+    /**
+     * Smooth a short path (2 or fewer positions) with proper centering for wide NPCs.
+     */
+    private static SmoothPath smoothShortPath(IPath path, WorldContext context, PathingConfig config) {
+        List<BlockPos> original = path.positions();
+        List<Vec3> smoothed = new ArrayList<>();
+
+        for (int i = 0; i < original.size(); i++) {
+            BlockPos prevPos = i > 0 ? original.get(i - 1) : null;
+            smoothed.add(calculateWaypointPosition(original.get(i), prevPos, context, config));
         }
 
         return new SmoothPath(smoothed, path.getGoal(), path.getTotalCost(), path.isComplete());

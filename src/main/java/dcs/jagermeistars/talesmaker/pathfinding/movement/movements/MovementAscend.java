@@ -71,15 +71,15 @@ public class MovementAscend extends Movement {
                 // Wait until on ground and ready to jump
                 if (ctx.isOnGround()) {
                     // Jump towards target
-                    Vec3 targetPos = Vec3.atBottomCenterOf(dest);
-                    MovementHelper.jumpTowards(ctx.getEntity(), targetPos);
+                    Vec3 jumpTarget = MovementHelper.calculateTargetPosition(ctx, src, dest);
+                    MovementHelper.jumpTowards(ctx.getEntity(), jumpTarget);
                     setState(MovementState.RUNNING);
                 }
                 return MovementResult.IN_PROGRESS;
 
             case RUNNING:
                 Vec3 currentPos = ctx.getPosition();
-                Vec3 targetPos = Vec3.atBottomCenterOf(dest);
+                Vec3 targetPos = MovementHelper.calculateTargetPosition(ctx, src, dest);
 
                 // Check if we've reached the destination
                 if (MovementHelper.hasReachedXZ(ctx.getEntity(), targetPos, REACH_THRESHOLD_SQ)

@@ -100,7 +100,7 @@ public class MovementParkour extends Movement {
                 // Sprint towards edge and prepare to jump
                 if (ctx.isOnGround()) {
                     Vec3 currentPos = ctx.getPosition();
-                    Vec3 srcCenter = Vec3.atBottomCenterOf(src);
+                    Vec3 srcCenter = MovementHelper.calculateTargetPosition(ctx, src, src);
 
                     // Calculate edge position
                     double edgeX = srcCenter.x + (dest.getX() - src.getX()) * 0.45;
@@ -110,7 +110,7 @@ public class MovementParkour extends Movement {
 
                     // Jump when near edge
                     if (distToEdgeSq < 0.15) {
-                        Vec3 targetPos = Vec3.atBottomCenterOf(dest);
+                        Vec3 targetPos = MovementHelper.calculateTargetPosition(ctx, src, dest);
                         MovementHelper.jumpTowards(ctx.getEntity(), targetPos);
                         hasJumped = true;
                         setState(MovementState.RUNNING);
@@ -122,7 +122,7 @@ public class MovementParkour extends Movement {
                 return MovementResult.IN_PROGRESS;
 
             case RUNNING:
-                Vec3 targetPos = Vec3.atBottomCenterOf(dest);
+                Vec3 targetPos = MovementHelper.calculateTargetPosition(ctx, src, dest);
 
                 // Check if we've landed at destination
                 if (MovementHelper.hasReachedXZ(ctx.getEntity(), targetPos, REACH_THRESHOLD_SQ) && ctx.isOnGround() && hasJumped) {

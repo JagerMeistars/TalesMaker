@@ -6,7 +6,9 @@ import dcs.jagermeistars.talesmaker.pathfinding.movement.MovementContext;
 import dcs.jagermeistars.talesmaker.pathfinding.movement.MovementHelper;
 import dcs.jagermeistars.talesmaker.pathfinding.movement.MovementResult;
 import dcs.jagermeistars.talesmaker.pathfinding.movement.MovementState;
+import dcs.jagermeistars.talesmaker.pathfinding.movement.PassageAnalyzer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -82,7 +84,17 @@ public class MovementDoor extends Movement {
             case WAITING:
                 // Move towards door and interact to open
                 Vec3 currentPos = ctx.getPosition();
+
+                // Calculate door center with offset for door hitbox
+                Direction moveDir = MovementHelper.getMovementDirection(src, dest);
+                BlockState doorStateForOffset = ctx.getBlockState(doorPos);
+                double doorOffset = PassageAnalyzer.getDoorOffset(doorStateForOffset, moveDir);
                 Vec3 doorCenter = Vec3.atCenterOf(doorPos);
+                if (moveDir.getAxis() == Direction.Axis.X) {
+                    doorCenter = doorCenter.add(0, 0, doorOffset);
+                } else {
+                    doorCenter = doorCenter.add(doorOffset, 0, 0);
+                }
 
                 double distToDoorSq = currentPos.distanceToSqr(doorCenter);
 
@@ -116,7 +128,7 @@ public class MovementDoor extends Movement {
                 return MovementResult.IN_PROGRESS;
 
             case RUNNING:
-                Vec3 targetPos = Vec3.atBottomCenterOf(dest);
+                Vec3 targetPos = MovementHelper.calculateTargetPositionThroughDoor(ctx, src, dest, doorPos);
 
                 // Check if we've reached the destination
                 if (MovementHelper.hasReachedXZ(ctx.getEntity(), targetPos, REACH_THRESHOLD_SQ)) {

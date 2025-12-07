@@ -1,6 +1,9 @@
 package dcs.jagermeistars.talesmaker.pathfinding.movement;
 
 import dcs.jagermeistars.talesmaker.pathfinding.path.SmoothPath;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
@@ -17,6 +20,7 @@ public class SmoothMovementExecutor {
     // Movement parameters
     private static final double WAYPOINT_REACH_THRESHOLD = 0.3;
     private static final double WAYPOINT_REACH_THRESHOLD_SQ = WAYPOINT_REACH_THRESHOLD * WAYPOINT_REACH_THRESHOLD;
+    private static final double DOOR_INTERACT_DISTANCE_SQ = 2.5 * 2.5; // 2.5 blocks
 
     // Stuck detection
     private Vec3 lastPosition;
@@ -111,6 +115,11 @@ public class SmoothMovementExecutor {
             stuckTicks = 0;
         }
 
+        // Check for doors along the path and open them if needed
+        if (ctx.getConfig().canOpenDoors()) {
+            tryOpenDoorsAlongPath(ctx, currentPos, targetWaypoint);
+        }
+
         // Handle Y level changes (jumping/falling)
         double dy = targetWaypoint.y - currentPos.y;
         if (dy > 0.5 && ctx.isOnGround()) {
@@ -123,6 +132,58 @@ public class SmoothMovementExecutor {
         }
 
         return MovementResult.IN_PROGRESS;
+    }
+
+    /**
+     * Check for doors between current position and target, and open them if needed.
+     */
+    private void tryOpenDoorsAlongPath(MovementContext ctx, Vec3 currentPos, Vec3 targetWaypoint) {
+        // Check blocks around the current position and towards target for doors
+        BlockPos currentBlock = new BlockPos((int) Math.floor(currentPos.x), (int) Math.floor(currentPos.y), (int) Math.floor(currentPos.z));
+        BlockPos targetBlock = new BlockPos((int) Math.floor(targetWaypoint.x), (int) Math.floor(targetWaypoint.y), (int) Math.floor(targetWaypoint.z));
+
+        // Check in a small area around the NPC for doors
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                for (int dy = 0; dy <= 1; dy++) {
+                    BlockPos checkPos = currentBlock.offset(dx, dy, dz);
+                    tryOpenDoorAt(ctx, checkPos, currentPos);
+                }
+            }
+        }
+
+        // Also check along the path to target
+        if (!currentBlock.equals(targetBlock)) {
+            int stepX = Integer.compare(targetBlock.getX(), currentBlock.getX());
+            int stepZ = Integer.compare(targetBlock.getZ(), currentBlock.getZ());
+
+            BlockPos intermediatePos = currentBlock.offset(stepX, 0, stepZ);
+            for (int dy = 0; dy <= 1; dy++) {
+                tryOpenDoorAt(ctx, intermediatePos.offset(0, dy, 0), currentPos);
+            }
+        }
+    }
+
+    /**
+     * Try to open a door at the given position if it exists and is closed.
+     */
+    private void tryOpenDoorAt(MovementContext ctx, BlockPos doorPos, Vec3 entityPos) {
+        BlockState state = ctx.getLevel().getBlockState(doorPos);
+
+        if (state.getBlock() instanceof DoorBlock door) {
+            boolean isOpen = state.getValue(DoorBlock.OPEN);
+
+            if (!isOpen) {
+                // Check distance to door
+                Vec3 doorCenter = Vec3.atCenterOf(doorPos);
+                double distSq = entityPos.distanceToSqr(doorCenter);
+
+                if (distSq < DOOR_INTERACT_DISTANCE_SQ) {
+                    // Open the door
+                    door.setOpen(ctx.getEntity(), ctx.getLevel(), state, doorPos, true);
+                }
+            }
+        }
     }
 
     /**
