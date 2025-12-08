@@ -1,6 +1,7 @@
 package dcs.jagermeistars.talesmaker.pathfinding.goals;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -8,30 +9,31 @@ import java.util.List;
 /**
  * Goal for patrolling between waypoints.
  * Cycles through waypoints in order, optionally reversing or looping.
+ * Supports sub-block precision with Vec3 coordinates.
  */
 public class GoalPatrol implements Goal {
 
-    private final List<BlockPos> waypoints;
+    private final List<Vec3> waypoints;
     private int currentIndex;
     private boolean reverseOnEnd;
     private boolean reversing;
-    private final int tolerance;
+    private final double tolerance;
 
     /**
-     * Create a patrol goal with waypoints.
-     * @param waypoints List of positions to patrol between
+     * Create a patrol goal with Vec3 waypoints.
+     * @param waypoints List of precise positions to patrol between
      */
-    public GoalPatrol(List<BlockPos> waypoints) {
-        this(waypoints, 1, true);
+    public GoalPatrol(List<Vec3> waypoints) {
+        this(waypoints, 0.3, true);
     }
 
     /**
      * Create a patrol goal with waypoints and options.
-     * @param waypoints List of positions to patrol between
+     * @param waypoints List of precise positions to patrol between
      * @param tolerance Distance tolerance for reaching waypoints
      * @param reverseOnEnd If true, reverse direction at ends; if false, loop to start
      */
-    public GoalPatrol(List<BlockPos> waypoints, int tolerance, boolean reverseOnEnd) {
+    public GoalPatrol(List<Vec3> waypoints, double tolerance, boolean reverseOnEnd) {
         if (waypoints == null || waypoints.isEmpty()) {
             throw new IllegalArgumentException("Waypoints cannot be empty");
         }
@@ -42,34 +44,56 @@ public class GoalPatrol implements Goal {
         this.reversing = false;
     }
 
+    /**
+     * Create a patrol goal from BlockPos waypoints (legacy support).
+     * @param blockWaypoints List of block positions
+     * @param tolerance Distance tolerance (as int, converted to double)
+     * @param reverseOnEnd If true, reverse direction at ends
+     */
+    public static GoalPatrol fromBlockPositions(List<BlockPos> blockWaypoints, int tolerance, boolean reverseOnEnd) {
+        List<Vec3> vec3Waypoints = new ArrayList<>();
+        for (BlockPos pos : blockWaypoints) {
+            vec3Waypoints.add(Vec3.atBottomCenterOf(pos));
+        }
+        return new GoalPatrol(vec3Waypoints, tolerance, reverseOnEnd);
+    }
+
     @Override
     public boolean isAtGoal(int x, int y, int z) {
-        BlockPos current = getCurrentWaypoint();
-        int dx = Math.abs(current.getX() - x);
-        int dy = Math.abs(current.getY() - y);
-        int dz = Math.abs(current.getZ() - z);
+        Vec3 current = getCurrentWaypoint();
+        double dx = Math.abs(current.x - (x + 0.5));
+        double dy = Math.abs(current.y - y);
+        double dz = Math.abs(current.z - (z + 0.5));
 
         return dx <= tolerance && dy <= tolerance && dz <= tolerance;
     }
 
     @Override
     public double heuristic(int x, int y, int z) {
-        BlockPos current = getCurrentWaypoint();
-        int dx = Math.abs(current.getX() - x);
-        int dy = Math.abs(current.getY() - y);
-        int dz = Math.abs(current.getZ() - z);
+        Vec3 current = getCurrentWaypoint();
+        double dx = Math.abs(current.x - (x + 0.5));
+        double dy = Math.abs(current.y - y);
+        double dz = Math.abs(current.z - (z + 0.5));
 
-        int diagonal = Math.min(dx, dz);
-        int straight = dx + dz - 2 * diagonal;
+        double diagonal = Math.min(dx, dz);
+        double straight = dx + dz - 2 * diagonal;
 
         return diagonal * 1.414 + straight + dy * 1.5;
     }
 
     /**
-     * Get the current target waypoint.
+     * Get the current target waypoint as Vec3.
      */
-    public BlockPos getCurrentWaypoint() {
+    public Vec3 getCurrentWaypoint() {
         return waypoints.get(currentIndex);
+    }
+
+    /**
+     * Get the current target waypoint as BlockPos (for pathfinding).
+     */
+    public BlockPos getCurrentWaypointBlockPos() {
+        Vec3 wp = waypoints.get(currentIndex);
+        return new BlockPos((int) Math.floor(wp.x), (int) Math.floor(wp.y), (int) Math.floor(wp.z));
     }
 
     /**
@@ -129,7 +153,7 @@ public class GoalPatrol implements Goal {
         }
     }
 
-    public List<BlockPos> getWaypoints() {
+    public List<Vec3> getWaypoints() {
         return new ArrayList<>(waypoints);
     }
 
@@ -137,7 +161,7 @@ public class GoalPatrol implements Goal {
         return waypoints.size();
     }
 
-    public int getTolerance() {
+    public double getTolerance() {
         return tolerance;
     }
 

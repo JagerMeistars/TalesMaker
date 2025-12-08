@@ -12,6 +12,7 @@ import dcs.jagermeistars.talesmaker.pathfinding.path.PathSmoother;
 import dcs.jagermeistars.talesmaker.pathfinding.path.SmoothPath;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -34,19 +35,21 @@ public class NpcPathingBehavior {
     @Nullable
     private Goal currentGoal;
 
-    // For dynamic goals (follow, patrol, wander)
+    // For dynamic goals (follow, patrol)
     @Nullable
     private GoalFollow followGoal;
     @Nullable
     private GoalPatrol patrolGoal;
-    @Nullable
-    private GoalWander wanderGoal;
 
     // Repath tracking
     private BlockPos lastTargetPos;
     private int repathCooldown;
     private static final int REPATH_COOLDOWN_TICKS = 20; // 1 second
     private static final double REPATH_DISTANCE_SQ = 9.0; // 3 blocks
+
+    // Exact target position (for precise positioning)
+    @Nullable
+    private Vec3 exactTargetPosition;
 
     // State
     private boolean active;
@@ -186,10 +189,6 @@ public class NpcPathingBehavior {
             // Advance to next waypoint and continue
             patrolGoal.advanceToNextWaypoint();
             requestPath(patrolGoal);
-        } else if (wanderGoal != null) {
-            // Generate new random target
-            wanderGoal.advanceToNextTarget();
-            requestPath(wanderGoal);
         } else if (followGoal != null && followGoal.isTargetValid()) {
             // Check if target moved, repath if needed
             BlockPos targetPos = followGoal.getTargetPosition();
@@ -225,9 +224,7 @@ public class NpcPathingBehavior {
         if (goal instanceof GoalFollow gf && gf.isTargetValid()) {
             lastTargetPos = gf.getTargetPosition();
         } else if (goal instanceof GoalPatrol gp) {
-            lastTargetPos = gp.getCurrentWaypoint();
-        } else if (goal instanceof GoalWander gw) {
-            lastTargetPos = gw.getCurrentTarget();
+            lastTargetPos = gp.getCurrentWaypointBlockPos();
         } else if (goal instanceof GoalBlock gb) {
             lastTargetPos = gb.getBlockPos();
         } else if (goal instanceof GoalNear gn) {
@@ -241,6 +238,12 @@ public class NpcPathingBehavior {
 
                 // Smooth the path using line-of-sight checks
                 SmoothPath smoothed = PathSmoother.smooth(path, smoothingContext, getCurrentConfig());
+
+                // If we have exact target position, replace the last waypoint
+                if (exactTargetPosition != null && smoothed != null) {
+                    smoothed = replaceLastWaypoint(smoothed, exactTargetPosition);
+                }
+
                 executor.setPath(smoothed);
                 state = "moving";
             } else {
@@ -265,11 +268,15 @@ public class NpcPathingBehavior {
     }
 
     /**
-     * Move to a specific position.
+     * Move to a specific position with sub-block precision.
+     * The NPC will stop exactly at the specified coordinates.
      */
     public void moveToPosition(double x, double y, double z) {
         clearDynamicGoals();
-        GoalBlock goal = new GoalBlock((int) x, (int) y, (int) z);
+        // Store exact target for precise final positioning
+        this.exactTargetPosition = new Vec3(x, y, z);
+        // Path to the block containing the target
+        GoalBlock goal = new GoalBlock((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
         setGoal(goal);
     }
 
@@ -308,16 +315,16 @@ public class NpcPathingBehavior {
     }
 
     /**
-     * Start patrolling waypoints.
+     * Start patrolling waypoints with Vec3 precision.
      */
-    public void startPatrol(List<BlockPos> waypoints) {
-        startPatrol(waypoints, 1, true);
+    public void startPatrolVec3(List<Vec3> waypoints) {
+        startPatrolVec3(waypoints, 0.3, true);
     }
 
     /**
-     * Start patrolling waypoints with options.
+     * Start patrolling waypoints with Vec3 precision and options.
      */
-    public void startPatrol(List<BlockPos> waypoints, int tolerance, boolean reverseOnEnd) {
+    public void startPatrolVec3(List<Vec3> waypoints, double tolerance, boolean reverseOnEnd) {
         if (waypoints == null || waypoints.isEmpty()) {
             return;
         }
@@ -327,19 +334,22 @@ public class NpcPathingBehavior {
     }
 
     /**
-     * Start wandering around a center point.
+     * Start patrolling waypoints (BlockPos version for legacy compatibility).
      */
-    public void startWander(BlockPos center, int radius) {
-        startWander(center, radius, 4);
+    public void startPatrol(List<BlockPos> waypoints) {
+        startPatrol(waypoints, 1, true);
     }
 
     /**
-     * Start wandering with vertical radius.
+     * Start patrolling waypoints with options (BlockPos version for legacy compatibility).
      */
-    public void startWander(BlockPos center, int radiusXZ, int radiusY) {
+    public void startPatrol(List<BlockPos> waypoints, int tolerance, boolean reverseOnEnd) {
+        if (waypoints == null || waypoints.isEmpty()) {
+            return;
+        }
         clearDynamicGoals();
-        wanderGoal = new GoalWander(center, radiusXZ, radiusY, 1);
-        setGoal(wanderGoal);
+        patrolGoal = GoalPatrol.fromBlockPositions(waypoints, tolerance, reverseOnEnd);
+        setGoal(patrolGoal);
     }
 
     /**
@@ -370,7 +380,24 @@ public class NpcPathingBehavior {
     private void clearDynamicGoals() {
         followGoal = null;
         patrolGoal = null;
-        wanderGoal = null;
+        exactTargetPosition = null;
+    }
+
+    /**
+     * Replace the last waypoint in a smooth path with an exact target position.
+     * This allows sub-block precision for the final destination.
+     */
+    private SmoothPath replaceLastWaypoint(SmoothPath path, Vec3 exactTarget) {
+        List<Vec3> waypoints = path.getWaypoints();
+        if (waypoints.isEmpty()) {
+            return path;
+        }
+
+        // Create a new list with the last waypoint replaced
+        List<Vec3> newWaypoints = new java.util.ArrayList<>(waypoints);
+        newWaypoints.set(newWaypoints.size() - 1, exactTarget);
+
+        return new SmoothPath(newWaypoints, path.getGoal(), path.getTotalCost(), path.isComplete());
     }
 
     /**

@@ -167,14 +167,14 @@ public class TalesMakerCommands {
                                 .then(Commands.literal("patrol")
                                         .then(Commands.argument("id", StringArgumentType.word())
                                                 .suggests(NPC_ID_SUGGESTIONS)
-                                                .then(Commands.argument("pos1", BlockPosArgument.blockPos())
-                                                        .then(Commands.argument("pos2", BlockPosArgument.blockPos())
+                                                .then(Commands.argument("pos1", Vec3Argument.vec3())
+                                                        .then(Commands.argument("pos2", Vec3Argument.vec3())
                                                                 .executes(TalesMakerCommands::movementPatrol2)
-                                                                .then(Commands.argument("pos3", BlockPosArgument.blockPos())
+                                                                .then(Commands.argument("pos3", Vec3Argument.vec3())
                                                                         .executes(TalesMakerCommands::movementPatrol3)
-                                                                        .then(Commands.argument("pos4", BlockPosArgument.blockPos())
+                                                                        .then(Commands.argument("pos4", Vec3Argument.vec3())
                                                                                 .executes(TalesMakerCommands::movementPatrol4)
-                                                                                .then(Commands.argument("pos5", BlockPosArgument.blockPos())
+                                                                                .then(Commands.argument("pos5", Vec3Argument.vec3())
                                                                                         .executes(TalesMakerCommands::movementPatrol5))))))))
                                 // /talesmaker movement follow <id> <entity>
                                 .then(Commands.literal("follow")
@@ -205,19 +205,7 @@ public class TalesMakerCommands {
                                         .then(Commands.argument("id", StringArgumentType.word())
                                                 .suggests(NPC_ID_SUGGESTIONS)
                                                 .then(Commands.argument("distance", FloatArgumentType.floatArg(0.1f))
-                                                        .executes(ctx -> movementDirectional(ctx, "right")))))
-                                // /talesmaker movement wander <id> <radius>
-                                // /talesmaker movement wander <id> <center> <radius>
-                                .then(Commands.literal("wander")
-                                        .then(Commands.argument("id", StringArgumentType.word())
-                                                .suggests(NPC_ID_SUGGESTIONS)
-                                                // Wander around current position with radius
-                                                .then(Commands.argument("radius", FloatArgumentType.floatArg(1.0f))
-                                                        .executes(TalesMakerCommands::movementWanderRadius))
-                                                // Wander around specific center with radius
-                                                .then(Commands.argument("center", Vec3Argument.vec3())
-                                                        .then(Commands.argument("radius", FloatArgumentType.floatArg(1.0f))
-                                                                .executes(TalesMakerCommands::movementWanderCenter))))))
+                                                        .executes(ctx -> movementDirectional(ctx, "right"))))))
                         // /talesmaker anim play <id> <animation> [mode]
                         // /talesmaker anim stop <id>
                         .then(Commands.literal("anim")
@@ -1087,14 +1075,14 @@ public class TalesMakerCommands {
             return 0;
         }
 
-        // Collect patrol points
-        java.util.List<BlockPos> points = new java.util.ArrayList<>();
+        // Collect patrol points as Vec3 for sub-block precision
+        java.util.List<Vec3> points = new java.util.ArrayList<>();
         for (int i = 1; i <= pointCount; i++) {
-            BlockPos pos = BlockPosArgument.getBlockPos(context, "pos" + i);
+            Vec3 pos = Vec3Argument.getVec3(context, "pos" + i);
             points.add(pos);
         }
 
-        npc.startPatrol(points);
+        npc.startPatrolVec3(points);
         source.sendSuccess(() -> Component.translatable("commands.talesmaker.movement.patrol.success",
                 npcId,
                 pointCount), true);
@@ -1152,62 +1140,6 @@ public class TalesMakerCommands {
                 npcId,
                 direction,
                 String.format("%.1f", distance)), true);
-        return 1;
-    }
-
-    private static int movementWanderRadius(CommandContext<CommandSourceStack> context) {
-        CommandSourceStack source = context.getSource();
-        String npcId = StringArgumentType.getString(context, "id");
-        float radius = FloatArgumentType.getFloat(context, "radius");
-
-        if (!(source.getLevel() instanceof ServerLevel serverLevel)) {
-            source.sendFailure(Component.literal("This command can only be used in a server world"));
-            return 0;
-        }
-
-        // Find NPC by custom ID
-        NpcEntity npc = serverLevel.getEntities(ModEntities.NPC.get(), entity -> npcId.equals(entity.getCustomId()))
-                .stream().findFirst().orElse(null);
-
-        if (npc == null) {
-            source.sendFailure(Component.literal("NPC with id '" + npcId + "' not found"));
-            return 0;
-        }
-
-        // Wander around NPC's current position
-        npc.startWander(npc.getX(), npc.getY(), npc.getZ(), radius);
-        source.sendSuccess(() -> Component.translatable("commands.talesmaker.movement.wander.success",
-                npcId,
-                String.format("%.1f", radius)), true);
-        return 1;
-    }
-
-    private static int movementWanderCenter(CommandContext<CommandSourceStack> context) {
-        CommandSourceStack source = context.getSource();
-        String npcId = StringArgumentType.getString(context, "id");
-        Vec3 center = Vec3Argument.getVec3(context, "center");
-        float radius = FloatArgumentType.getFloat(context, "radius");
-
-        if (!(source.getLevel() instanceof ServerLevel serverLevel)) {
-            source.sendFailure(Component.literal("This command can only be used in a server world"));
-            return 0;
-        }
-
-        // Find NPC by custom ID
-        NpcEntity npc = serverLevel.getEntities(ModEntities.NPC.get(), entity -> npcId.equals(entity.getCustomId()))
-                .stream().findFirst().orElse(null);
-
-        if (npc == null) {
-            source.sendFailure(Component.literal("NPC with id '" + npcId + "' not found"));
-            return 0;
-        }
-
-        // Wander around specified center
-        npc.startWander(center.x, center.y, center.z, radius);
-        source.sendSuccess(() -> Component.translatable("commands.talesmaker.movement.wander.success_center",
-                npcId,
-                String.format("%.1f, %.1f, %.1f", center.x, center.y, center.z),
-                String.format("%.1f", radius)), true);
         return 1;
     }
 

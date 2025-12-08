@@ -112,7 +112,7 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
 
     // Movement system fields
     private static final EntityDataAccessor<String> MOVEMENT_STATE = SynchedEntityData.defineId(NpcEntity.class,
-            EntityDataSerializers.STRING); // idle, goto, patrol, follow, wander, directional
+            EntityDataSerializers.STRING); // idle, goto, patrol, follow, directional
     private static final EntityDataAccessor<Float> MOVEMENT_TARGET_X = SynchedEntityData.defineId(NpcEntity.class,
             EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> MOVEMENT_TARGET_Y = SynchedEntityData.defineId(NpcEntity.class,
@@ -125,10 +125,6 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
             EntityDataSerializers.STRING); // JSON array of points
     private static final EntityDataAccessor<Integer> PATROL_INDEX = SynchedEntityData.defineId(NpcEntity.class,
             EntityDataSerializers.INT);
-    private static final EntityDataAccessor<String> WANDER_POLYGON = SynchedEntityData.defineId(NpcEntity.class,
-            EntityDataSerializers.STRING); // JSON array of polygon vertices
-    private static final EntityDataAccessor<Float> WANDER_Y = SynchedEntityData.defineId(NpcEntity.class,
-            EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DIRECTIONAL_REMAINING = SynchedEntityData.defineId(NpcEntity.class,
             EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DIRECTIONAL_VEC_X = SynchedEntityData.defineId(NpcEntity.class,
@@ -219,8 +215,6 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         builder.define(MOVEMENT_TARGET_ENTITY_ID, -1);
         builder.define(PATROL_POINTS, "");
         builder.define(PATROL_INDEX, 0);
-        builder.define(WANDER_POLYGON, "");
-        builder.define(WANDER_Y, 0.0f);
         builder.define(DIRECTIONAL_REMAINING, 0.0f);
         builder.define(DIRECTIONAL_VEC_X, 0.0f);
         builder.define(DIRECTIONAL_VEC_Z, 0.0f);
@@ -758,23 +752,6 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         this.entityData.set(PATROL_INDEX, index);
     }
 
-    // Wander accessors
-    public String getWanderPolygon() {
-        return this.entityData.get(WANDER_POLYGON);
-    }
-
-    public void setWanderPolygon(String polygon) {
-        this.entityData.set(WANDER_POLYGON, polygon != null ? polygon : "");
-    }
-
-    public float getWanderY() {
-        return this.entityData.get(WANDER_Y);
-    }
-
-    public void setWanderY(float y) {
-        this.entityData.set(WANDER_Y, y);
-    }
-
     // Directional movement accessors
     public float getDirectionalRemaining() {
         return this.entityData.get(DIRECTIONAL_REMAINING);
@@ -798,7 +775,7 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
     public void moveToPosition(double x, double y, double z) {
         setMovementState("goto");
         setMovementTarget(x, y, z);
-        pathingBehavior.moveToPosition(new BlockPos((int) x, (int) y, (int) z));
+        pathingBehavior.moveToPosition(x, y, z);
     }
 
     public void stopMovement() {
@@ -813,6 +790,14 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         }
         setMovementState("patrol");
         pathingBehavior.startPatrol(points);
+    }
+
+    public void startPatrolVec3(java.util.List<net.minecraft.world.phys.Vec3> points) {
+        if (points == null || points.isEmpty()) {
+            return;
+        }
+        setMovementState("patrol");
+        pathingBehavior.startPatrolVec3(points);
     }
 
     public void startFollow(net.minecraft.world.entity.Entity target) {
@@ -862,12 +847,6 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
 
         setMovementState("directional");
         moveToPosition(x, getY(), z);
-    }
-
-    public void startWander(double centerX, double centerY, double centerZ, float radius) {
-        setMovementState("wander");
-        setWanderY((float) centerY);
-        pathingBehavior.startWander(new BlockPos((int) centerX, (int) centerY, (int) centerZ), (int) radius);
     }
 
     /**
