@@ -53,15 +53,6 @@ public class AbstractPathfinder {
 
         // Debug: Check start position validity
         boolean canStand = context.canStandAt(start.getX(), start.getY(), start.getZ());
-        System.out.println("[Pathfinding DEBUG] Start: " + start + ", canStandAt=" + canStand);
-        System.out.println("[Pathfinding DEBUG] Block at y: " + context.getBlockState(start.getX(), start.getY(), start.getZ()));
-        System.out.println("[Pathfinding DEBUG] Block at y+1: " + context.getBlockState(start.getX(), start.getY() + 1, start.getZ()));
-        System.out.println("[Pathfinding DEBUG] Block at y-1: " + context.getBlockState(start.getX(), start.getY() - 1, start.getZ()));
-        System.out.println("[Pathfinding DEBUG] isCached at y: " + context.isCached(start.getX(), start.getY(), start.getZ()));
-        System.out.println("[Pathfinding DEBUG] Ground at y-1: solid=" + context.isSolid(start.getX(), start.getY() - 1, start.getZ()));
-        System.out.println("[Pathfinding DEBUG] Passable at y: " + context.isPassable(start.getX(), start.getY(), start.getZ()));
-        System.out.println("[Pathfinding DEBUG] Passable at y+1: " + context.isPassable(start.getX(), start.getY() + 1, start.getZ()));
-
         // Initialize start node
         PathNode startNode = getOrCreateNode(start);
         startNode.setGCost(0);

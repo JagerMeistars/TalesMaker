@@ -113,18 +113,10 @@ public class NpcPathingBehavior {
         // Check if we need to repath for dynamic goals
         checkForRepath();
 
-        // DEBUG: Log executor state
-        System.out.println("[NpcPathingBehavior] tick - active=" + active + " goal=" + (currentGoal != null) +
-            " executor.isExecuting=" + executor.isExecuting() +
-            " calculator.isCalculating=" + calculator.isCalculating() +
-            " state=" + state);
-
         // Execute current movement
         if (executor.isExecuting()) {
             MovementContext ctx = new MovementContext(npc, getCurrentConfig());
-            System.out.println("[NpcPathingBehavior] Before executor.tick() - width=" + ctx.getConfig().getEntityWidth());
             MovementResult result = executor.tick(ctx);
-            System.out.println("[NpcPathingBehavior] After executor.tick() - result=" + result);
 
             switch (result) {
                 case SUCCESS:

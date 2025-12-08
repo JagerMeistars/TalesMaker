@@ -270,13 +270,13 @@ public final class MovementHelper {
 
     /**
      * Calculates the target position when moving through a door,
-     * accounting for door hitbox offset.
+     * accounting for door hitbox offset and door passage width (0.7 blocks).
      *
      * @param ctx     movement context
      * @param src     source position
      * @param dest    destination position
      * @param doorPos position of the door block
-     * @return Vec3 with optimal coordinates adjusted for door hitbox
+     * @return Vec3 with optimal coordinates adjusted for door passage
      */
     public static Vec3 calculateTargetPositionThroughDoor(
             MovementContext ctx,
@@ -284,16 +284,20 @@ public final class MovementHelper {
             BlockPos dest,
             BlockPos doorPos
     ) {
-        Vec3 baseTarget = calculateTargetPosition(ctx, src, dest);
-
+        float entityWidth = ctx.getConfig().getEntityWidth();
         BlockState doorState = ctx.getBlockState(doorPos);
-        Direction moveDir = getMovementDirection(src, dest);
-        double doorOffset = PassageAnalyzer.getDoorOffset(doorState, moveDir);
 
-        if (moveDir.getAxis() == Direction.Axis.X) {
-            return baseTarget.add(0, 0, doorOffset);
+        // For NPCs that fit through door (width <= 0.7), center on door passage
+        double y = dest.getY();
+
+        if (PassageAnalyzer.canFitThroughDoor(entityWidth)) {
+            // Calculate centered position within the door passage
+            double[] doorPosition = PassageAnalyzer.calculateDoorPassagePosition(doorPos, doorState, entityWidth);
+            return new Vec3(doorPosition[0], y, doorPosition[1]);
         } else {
-            return baseTarget.add(doorOffset, 0, 0);
+            // NPC too wide for door - shouldn't happen if pathfinding is correct
+            // Fall back to standard positioning
+            return calculateTargetPosition(ctx, src, dest);
         }
     }
 

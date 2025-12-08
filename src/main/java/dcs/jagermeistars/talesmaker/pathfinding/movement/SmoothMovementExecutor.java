@@ -20,12 +20,11 @@ public class SmoothMovementExecutor {
     // Movement parameters
     private static final double WAYPOINT_REACH_THRESHOLD = 0.3;
     private static final double WAYPOINT_REACH_THRESHOLD_SQ = WAYPOINT_REACH_THRESHOLD * WAYPOINT_REACH_THRESHOLD;
-    private static final double DOOR_INTERACT_DISTANCE_SQ = 2.5 * 2.5; // 2.5 blocks
 
     // Stuck detection
     private Vec3 lastPosition;
     private int stuckTicks;
-    private static final int STUCK_THRESHOLD = 60;
+    private static final int STUCK_THRESHOLD = 20; // 1 second at 20 TPS
     private static final double STUCK_DISTANCE_SQ = 0.01;
 
     // State
@@ -61,6 +60,9 @@ public class SmoothMovementExecutor {
         finished = false;
         failed = false;
     }
+
+    // Door interaction
+    private static final double DOOR_INTERACT_DISTANCE_SQ = 2.25; // 1.5 blocks
 
     /**
      * Execute one tick of movement.
@@ -98,6 +100,9 @@ public class SmoothMovementExecutor {
         // Get target waypoint
         Vec3 targetWaypoint = currentPath.getWaypoint(currentWaypointIndex + 1);
 
+        // Check for doors ahead and open them
+        tryOpenDoorsAhead(ctx, currentPos, targetWaypoint);
+
         // Check if we've reached the current target
         double distXZ = distanceXZSq(currentPos, targetWaypoint);
         if (distXZ < WAYPOINT_REACH_THRESHOLD_SQ) {
@@ -115,74 +120,66 @@ public class SmoothMovementExecutor {
             stuckTicks = 0;
         }
 
-        // Check for doors along the path and open them if needed
-        if (ctx.getConfig().canOpenDoors()) {
-            tryOpenDoorsAlongPath(ctx, currentPos, targetWaypoint);
-        }
-
         // Handle Y level changes (jumping/falling)
         double dy = targetWaypoint.y - currentPos.y;
         if (dy > 0.5 && ctx.isOnGround()) {
             // Need to jump
             MovementHelper.jumpTowards(ctx.getEntity(), targetWaypoint);
         } else {
-            // Check for wall collision and adjust movement if needed
-            Vec3 adjustedTarget = adjustForWallCollision(ctx, currentPos, targetWaypoint);
-            MovementHelper.moveTowards(ctx.getEntity(), adjustedTarget);
+            MovementHelper.moveTowards(ctx.getEntity(), targetWaypoint);
         }
 
         return MovementResult.IN_PROGRESS;
     }
 
     /**
-     * Check for doors between current position and target, and open them if needed.
+     * Check for closed doors between current position and target, and open them.
      */
-    private void tryOpenDoorsAlongPath(MovementContext ctx, Vec3 currentPos, Vec3 targetWaypoint) {
-        // Check blocks around the current position and towards target for doors
-        BlockPos currentBlock = new BlockPos((int) Math.floor(currentPos.x), (int) Math.floor(currentPos.y), (int) Math.floor(currentPos.z));
-        BlockPos targetBlock = new BlockPos((int) Math.floor(targetWaypoint.x), (int) Math.floor(targetWaypoint.y), (int) Math.floor(targetWaypoint.z));
+    private void tryOpenDoorsAhead(MovementContext ctx, Vec3 currentPos, Vec3 targetWaypoint) {
+        // Check current block and next few blocks towards target for doors
+        BlockPos currentBlock = new BlockPos((int) Math.floor(currentPos.x),
+                                              (int) Math.floor(currentPos.y),
+                                              (int) Math.floor(currentPos.z));
+        BlockPos targetBlock = new BlockPos((int) Math.floor(targetWaypoint.x),
+                                             (int) Math.floor(targetWaypoint.y),
+                                             (int) Math.floor(targetWaypoint.z));
 
-        // Check in a small area around the NPC for doors
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                for (int dy = 0; dy <= 1; dy++) {
-                    BlockPos checkPos = currentBlock.offset(dx, dy, dz);
-                    tryOpenDoorAt(ctx, checkPos, currentPos);
-                }
-            }
-        }
+        // Check blocks between current and target (up to 2 blocks ahead)
+        int dx = Integer.compare(targetBlock.getX(), currentBlock.getX());
+        int dz = Integer.compare(targetBlock.getZ(), currentBlock.getZ());
 
-        // Also check along the path to target
-        if (!currentBlock.equals(targetBlock)) {
-            int stepX = Integer.compare(targetBlock.getX(), currentBlock.getX());
-            int stepZ = Integer.compare(targetBlock.getZ(), currentBlock.getZ());
+        for (int i = 0; i <= 2; i++) {
+            BlockPos checkPos = currentBlock.offset(dx * i, 0, dz * i);
 
-            BlockPos intermediatePos = currentBlock.offset(stepX, 0, stepZ);
-            for (int dy = 0; dy <= 1; dy++) {
-                tryOpenDoorAt(ctx, intermediatePos.offset(0, dy, 0), currentPos);
-            }
+            // Check both at feet level and head level (doors are 2 blocks tall)
+            tryOpenDoorAt(ctx, currentPos, checkPos);
+            tryOpenDoorAt(ctx, currentPos, checkPos.above());
         }
     }
 
     /**
-     * Try to open a door at the given position if it exists and is closed.
+     * Try to open a door at the given position if it's closed and within range.
      */
-    private void tryOpenDoorAt(MovementContext ctx, BlockPos doorPos, Vec3 entityPos) {
-        BlockState state = ctx.getLevel().getBlockState(doorPos);
+    private void tryOpenDoorAt(MovementContext ctx, Vec3 currentPos, BlockPos doorPos) {
+        BlockState state = ctx.getBlockState(doorPos);
 
-        if (state.getBlock() instanceof DoorBlock door) {
-            boolean isOpen = state.getValue(DoorBlock.OPEN);
+        if (!(state.getBlock() instanceof DoorBlock door)) {
+            return;
+        }
 
-            if (!isOpen) {
-                // Check distance to door
-                Vec3 doorCenter = Vec3.atCenterOf(doorPos);
-                double distSq = entityPos.distanceToSqr(doorCenter);
+        // Check if door is closed
+        boolean isOpen = state.getValue(DoorBlock.OPEN);
+        if (isOpen) {
+            return;
+        }
 
-                if (distSq < DOOR_INTERACT_DISTANCE_SQ) {
-                    // Open the door
-                    door.setOpen(ctx.getEntity(), ctx.getLevel(), state, doorPos, true);
-                }
-            }
+        // Check if within interaction range
+        Vec3 doorCenter = Vec3.atCenterOf(doorPos);
+        double distSq = currentPos.distanceToSqr(doorCenter);
+
+        if (distSq < DOOR_INTERACT_DISTANCE_SQ) {
+            // Open the door
+            door.setOpen(ctx.getEntity(), ctx.getLevel(), state, doorPos, true);
         }
     }
 
@@ -265,20 +262,5 @@ public class SmoothMovementExecutor {
             return finished ? 1.0 : 0.0;
         }
         return (double) currentWaypointIndex / (currentPath.length() - 1);
-    }
-
-    /**
-     * Adjust target position to avoid wall collisions.
-     * Currently disabled - just returns the original target.
-     *
-     * @param ctx         movement context
-     * @param currentPos  current entity position
-     * @param target      original target waypoint
-     * @return original target (no adjustment)
-     */
-    private Vec3 adjustForWallCollision(MovementContext ctx, Vec3 currentPos, Vec3 target) {
-        // Wall collision adjustment disabled - relying on A* and PathSmoother
-        // to generate paths that wide entities can actually follow
-        return target;
     }
 }

@@ -1,6 +1,7 @@
 package dcs.jagermeistars.talesmaker.pathfinding.context;
 
 import dcs.jagermeistars.talesmaker.pathfinding.config.PathingConfig;
+import dcs.jagermeistars.talesmaker.pathfinding.movement.PassageAnalyzer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
@@ -122,7 +123,13 @@ public class WorldContext {
         // Check collision shape
         // Note: We can't use level here, so we approximate
         if (state.getBlock() instanceof DoorBlock) {
-            return config.canOpenDoors() || state.getValue(DoorBlock.OPEN);
+            // Check if NPC can open doors and fits through door passage (0.7 blocks wide)
+            boolean canOpen = config.canOpenDoors() || state.getValue(DoorBlock.OPEN);
+            if (!canOpen) {
+                return false;
+            }
+            // NPC must fit through door passage width
+            return config.getEntityWidth() <= PassageAnalyzer.DOOR_PASSAGE_WIDTH;
         }
 
         if (state.getBlock() instanceof TrapDoorBlock) {

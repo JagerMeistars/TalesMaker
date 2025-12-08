@@ -4,12 +4,19 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.DoorHingeSide;
 
 /**
  * Utility class for analyzing passages and calculating optimal centering coordinates
  * for wide NPCs navigating through corridors and doorways.
  */
 public final class PassageAnalyzer {
+
+    /**
+     * Width of passage through an open door in blocks.
+     * Door hitbox leaves only 0.7 blocks of passable space when open.
+     */
+    public static final double DOOR_PASSAGE_WIDTH = 0.7;
 
     private PassageAnalyzer() {
         // Utility class - no instantiation
@@ -151,27 +158,16 @@ public final class PassageAnalyzer {
         // Wall on positive side is at (baseCoord + maxOffset + 1), so passage ends at (baseCoord + maxOffset + 1)
         double passageStart = baseCoord + minOffset;
         double passageEnd = baseCoord + maxOffset + 1;
-        double passageWidth = passageEnd - passageStart;
 
         // Calculate center of passage
         double passageCenter = (passageStart + passageEnd) / 2.0;
 
-        // DEBUG logging
-        System.out.println("[PassageAnalyzer] axis=" + axis + " pos=" + pos + " entityWidth=" + entityWidth + " entityHeight=" + entityHeight);
-        System.out.println("[PassageAnalyzer] minOffset=" + minOffset + " maxOffset=" + maxOffset);
-        System.out.println("[PassageAnalyzer] passageStart=" + passageStart + " passageEnd=" + passageEnd + " passageWidth=" + passageWidth);
-        System.out.println("[PassageAnalyzer] passageCenter=" + passageCenter + " standardCenter=" + (baseCoord + 0.5));
-
         // For wide NPCs (width > 1.0), always center in passage
-        // This ensures NPC doesn't clip into walls
-        // For narrower passages or when NPC barely fits, centering is critical
         if (entityWidth > 1.0f) {
-            System.out.println("[PassageAnalyzer] Using passageCenter: " + passageCenter);
             return passageCenter;
         }
 
         // For narrow NPCs, use standard block center
-        System.out.println("[PassageAnalyzer] Using standardCenter: " + (baseCoord + 0.5));
         return baseCoord + 0.5;
     }
 
@@ -203,6 +199,130 @@ public final class PassageAnalyzer {
             case WEST -> (movementDirection.getAxis() == Direction.Axis.X) ? offset : 0.0;
             default -> 0.0;
         };
+    }
+
+    /**
+     * Calculates the center position for NPC to pass through a door.
+     * When a door is open, it swings to one side (based on hinge position),
+     * leaving the passage on the OPPOSITE side from where the door swings.
+     *
+     * Door thickness is 3/16 blocks (0.1875). When open, the door rotates 90 degrees.
+     *
+     * @param doorPos     position of the door block
+     * @param doorState   block state of the door
+     * @param entityWidth width of the entity
+     * @return Vec3 with X and Z coordinates for passing through the door
+     */
+    public static double[] calculateDoorPassagePosition(BlockPos doorPos, BlockState doorState, float entityWidth) {
+        double baseX = doorPos.getX() + 0.5;
+        double baseZ = doorPos.getZ() + 0.5;
+
+        if (!(doorState.getBlock() instanceof DoorBlock)) {
+            return new double[]{baseX, baseZ};
+        }
+
+        // Door thickness: 3/16 blocks = 0.1875
+        double doorThickness = 3.0 / 16.0;
+
+        // Get door properties
+        Direction facing = doorState.getValue(DoorBlock.FACING);
+        DoorHingeSide hinge = doorState.getValue(DoorBlock.HINGE);
+        boolean isOpen = doorState.getValue(DoorBlock.OPEN);
+
+        // If door is closed, use block center
+        if (!isOpen) {
+            return new double[]{baseX, baseZ};
+        }
+
+        // When door is open, it swings perpendicular to its facing direction
+        // NORTH/SOUTH facing doors swing along X axis
+        // EAST/WEST facing doors swing along Z axis
+
+        // Calculate where the door panel is and offset NPC away from it
+        double offsetAmount = (1.0 - doorThickness) / 2.0 - 0.5; // ~-0.09
+
+        double resultX = baseX;
+        double resultZ = baseZ;
+
+        switch (facing) {
+            case NORTH:
+                // Door swings along X axis
+                if (hinge == DoorHingeSide.LEFT) {
+                    // Hinge on west (-X), door swings to west, passage on east (+X)
+                    resultX = doorPos.getX() + doorThickness + (1.0 - doorThickness) / 2.0;
+                } else {
+                    // Hinge on east (+X), door swings to east, passage on west (-X)
+                    resultX = doorPos.getX() + (1.0 - doorThickness) / 2.0;
+                }
+                break;
+            case SOUTH:
+                // Door swings along X axis
+                if (hinge == DoorHingeSide.LEFT) {
+                    // Hinge on east (+X), door swings to east, passage on west (-X)
+                    resultX = doorPos.getX() + (1.0 - doorThickness) / 2.0;
+                } else {
+                    // Hinge on west (-X), door swings to west, passage on east (+X)
+                    resultX = doorPos.getX() + doorThickness + (1.0 - doorThickness) / 2.0;
+                }
+                break;
+            case EAST:
+                // Door swings along Z axis
+                if (hinge == DoorHingeSide.LEFT) {
+                    // Hinge on north (-Z), door swings to north, passage on south (+Z)
+                    resultZ = doorPos.getZ() + doorThickness + (1.0 - doorThickness) / 2.0;
+                } else {
+                    // Hinge on south (+Z), door swings to south, passage on north (-Z)
+                    resultZ = doorPos.getZ() + (1.0 - doorThickness) / 2.0;
+                }
+                break;
+            case WEST:
+                // Door swings along Z axis
+                if (hinge == DoorHingeSide.LEFT) {
+                    // Hinge on south (+Z), door swings to south, passage on north (-Z)
+                    resultZ = doorPos.getZ() + (1.0 - doorThickness) / 2.0;
+                } else {
+                    // Hinge on north (-Z), door swings to north, passage on south (+Z)
+                    resultZ = doorPos.getZ() + doorThickness + (1.0 - doorThickness) / 2.0;
+                }
+                break;
+            default:
+                break;
+        }
+
+        return new double[]{resultX, resultZ};
+    }
+
+    /**
+     * Legacy method for backward compatibility.
+     * @deprecated Use calculateDoorPassagePosition instead
+     */
+    @Deprecated
+    public static double calculateDoorPassageCenter(BlockPos doorPos, BlockState doorState,
+                                                     Direction.Axis passageAxis, float entityWidth) {
+        double[] pos = calculateDoorPassagePosition(doorPos, doorState, entityWidth);
+        return (passageAxis == Direction.Axis.X) ? pos[0] : pos[1];
+    }
+
+    /**
+     * Checks if a position contains a door block.
+     *
+     * @param ctx movement context
+     * @param pos position to check
+     * @return true if position contains a door
+     */
+    public static boolean isDoorAt(MovementContext ctx, BlockPos pos) {
+        BlockState state = ctx.getBlockState(pos);
+        return state.getBlock() instanceof DoorBlock;
+    }
+
+    /**
+     * Checks if an entity with given width can pass through a door.
+     *
+     * @param entityWidth width of the entity
+     * @return true if entity can fit through door passage
+     */
+    public static boolean canFitThroughDoor(float entityWidth) {
+        return entityWidth <= DOOR_PASSAGE_WIDTH;
     }
 
     /**

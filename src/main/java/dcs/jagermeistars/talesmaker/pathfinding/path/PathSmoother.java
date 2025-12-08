@@ -5,8 +5,11 @@ import dcs.jagermeistars.talesmaker.pathfinding.config.PathingConfig;
 import dcs.jagermeistars.talesmaker.pathfinding.movement.PassageAnalyzer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+
+import static dcs.jagermeistars.talesmaker.pathfinding.movement.PassageAnalyzer.DOOR_PASSAGE_WIDTH;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -68,6 +71,7 @@ public final class PathSmoother {
     /**
      * Calculate waypoint position with proper centering for wide NPCs.
      * Uses PassageAnalyzer to find optimal position in passages.
+     * For door passages, centers on the 0.7-block door passage width.
      *
      * @param pos     target block position
      * @param prevPos previous position (for movement direction), or null for start
@@ -80,7 +84,18 @@ public final class PathSmoother {
         float entityWidth = config.getEntityWidth();
         float entityHeight = config.getEntityHeight();
 
-        // For narrow NPCs, use standard block center
+        // Check if this position is a door
+        BlockState state = context.getBlockState(pos);
+        if (state.getBlock() instanceof DoorBlock) {
+            // For doors, center on door passage width (0.7 blocks)
+            // Only NPCs with width <= 0.7 can pass through
+            if (entityWidth <= DOOR_PASSAGE_WIDTH) {
+                double[] doorPos = PassageAnalyzer.calculateDoorPassagePosition(pos, state, entityWidth);
+                return new Vec3(doorPos[0], pos.getY(), doorPos[1]);
+            }
+        }
+
+        // For narrow NPCs (not at doors), use standard block center
         if (entityWidth <= 1.0f) {
             return Vec3.atBottomCenterOf(pos);
         }
@@ -91,11 +106,20 @@ public final class PathSmoother {
         double z = calculateCenteredCoordForPath(pos, Direction.Axis.Z, entityWidth, entityHeight, context);
         double y = pos.getY();
 
-        System.out.println("[PathSmoother] Wide NPC waypoint: pos=" + pos + " -> (" +
-            String.format("%.2f", x) + ", " + y + ", " + String.format("%.2f", z) +
-            ") entityWidth=" + entityWidth);
-
         return new Vec3(x, y, z);
+    }
+
+    /**
+     * Determines the primary direction of movement between two positions.
+     */
+    private static Direction getMovementDirection(BlockPos from, BlockPos to) {
+        int dx = to.getX() - from.getX();
+        int dz = to.getZ() - from.getZ();
+        if (Math.abs(dx) > Math.abs(dz)) {
+            return dx > 0 ? Direction.EAST : Direction.WEST;
+        } else {
+            return dz > 0 ? Direction.SOUTH : Direction.NORTH;
+        }
     }
 
     /**
@@ -122,14 +146,7 @@ public final class PathSmoother {
         double passageStart = baseCoord + wallNegative + 1; // +1 because wall itself is not passable
         double passageEnd = baseCoord + wallPositive;       // wall position, passage ends before it
 
-        double passageWidth = passageEnd - passageStart;
         double passageCenter = (passageStart + passageEnd) / 2.0;
-
-        System.out.println("[PathSmoother] axis=" + axis + " pos=" +
-            (axis == Direction.Axis.X ? pos.getX() : pos.getZ()) +
-            " wallNeg=" + wallNegative + " wallPos=" + wallPositive +
-            " passageStart=" + passageStart + " passageEnd=" + passageEnd +
-            " passageWidth=" + passageWidth + " center=" + passageCenter);
 
         return passageCenter;
     }

@@ -70,7 +70,6 @@ public class PathCalculator {
         WorldContext context = new WorldContext(pathConfig);
         int captureRadius = (int) Math.min(pathConfig.getMaxRange(), 32);
         context.captureRegion(level, start, captureRadius);
-        System.out.println("[Pathfinding DEBUG] Captured region: radius=" + captureRadius + ", cacheSize=" + context.getCache().size());
 
         // Debug: Check if start position is valid
         boolean canStandAtStart = context.canStandAt(start.getX(), start.getY(), start.getZ());
