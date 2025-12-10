@@ -21,7 +21,9 @@ public class ResourceErrorManager {
     public enum ResourceType {
         MODEL("error.talesmaker.missing_model"),
         TEXTURE("error.talesmaker.missing_texture"),
-        ANIMATION("error.talesmaker.missing_animation");
+        ANIMATION("error.talesmaker.missing_animation"),
+        /** Animation name not found in animation file */
+        ANIMATION_NAME("error.talesmaker.missing_animation_name");
 
         private final String translationKey;
 
@@ -37,20 +39,37 @@ public class ResourceErrorManager {
     public static class ResourceError {
         private final ResourceType type;
         private final ResourceLocation path;
+        private final String extraInfo; // Additional info (e.g., animation name)
         private long startTime;
         private int count;
 
         public ResourceError(ResourceType type, ResourceLocation path, long startTime) {
+            this(type, path, null, startTime);
+        }
+
+        public ResourceError(ResourceType type, ResourceLocation path, String extraInfo, long startTime) {
             this.type = type;
             this.path = path;
+            this.extraInfo = extraInfo;
             this.startTime = startTime;
             this.count = 1;
         }
 
         public ResourceType type() { return type; }
         public ResourceLocation path() { return path; }
+        public String extraInfo() { return extraInfo; }
         public long startTime() { return startTime; }
         public int count() { return count; }
+
+        /**
+         * Get display path string (includes extraInfo if present).
+         */
+        public String getDisplayPath() {
+            if (extraInfo != null && !extraInfo.isEmpty()) {
+                return path.toString() + " -> " + extraInfo;
+            }
+            return path.toString();
+        }
 
         public void incrementCount() {
             this.count++;
@@ -86,10 +105,17 @@ public class ResourceErrorManager {
         }
 
         /**
-         * Check if this error matches another (same type and path)
+         * Check if this error matches another (same type, path, and extraInfo)
          */
-        public boolean matches(ResourceType type, ResourceLocation path) {
-            return this.type == type && this.path.equals(path);
+        public boolean matches(ResourceType type, ResourceLocation path, String extraInfo) {
+            if (this.type != type || !this.path.equals(path)) {
+                return false;
+            }
+            // Compare extraInfo (both null or both equal)
+            if (this.extraInfo == null) {
+                return extraInfo == null;
+            }
+            return this.extraInfo.equals(extraInfo);
         }
     }
 
@@ -97,23 +123,37 @@ public class ResourceErrorManager {
      * Adds a resource error. If same error already exists, increments its count.
      */
     public static void addError(ResourceType type, ResourceLocation path) {
+        addError(type, path, null);
+    }
+
+    /**
+     * Adds a resource error with extra info. If same error already exists, increments its count.
+     */
+    public static void addError(ResourceType type, ResourceLocation path, String extraInfo) {
         synchronized (errors) {
             // Check if same error already exists - stack it
             for (ResourceError error : errors) {
-                if (error.matches(type, path)) {
+                if (error.matches(type, path, extraInfo)) {
                     error.incrementCount();
                     return;
                 }
             }
 
             // New error
-            errors.add(new ResourceError(type, path, System.currentTimeMillis()));
+            errors.add(new ResourceError(type, path, extraInfo, System.currentTimeMillis()));
 
             // Limit errors
             while (errors.size() > MAX_ERRORS) {
                 errors.remove(0);
             }
         }
+    }
+
+    /**
+     * Adds an animation name error (animation name not found in file).
+     */
+    public static void addAnimationNameError(String animationName, ResourceLocation animationFile) {
+        addError(ResourceType.ANIMATION_NAME, animationFile, animationName);
     }
 
     /**

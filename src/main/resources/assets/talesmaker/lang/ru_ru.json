@@ -3,6 +3,7 @@
   "error.talesmaker.missing_model": "Отсутствует модель",
   "error.talesmaker.missing_texture": "Отсутствует текстура",
   "error.talesmaker.missing_animation": "Отсутствует анимация",
+  "error.talesmaker.missing_animation_name": "Анимация не найдена",
   "key.talesmaker.history": "Открыть историю диалогов",
   "key.talesmaker.interact": "Взаимодействие",
   "key.categories.talesmaker": "TalesMaker",

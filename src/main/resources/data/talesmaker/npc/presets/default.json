@@ -1,25 +1,26 @@
 [
     {
-        "id": "placeholder",
+        "id": "default/male",
         "head": "head",
         "name": {
-            "text": "Placeholder NPC",
-            "color": "aqua",
-            "bold": true
+            "text": "default/male"
         },
-        "model": "talesmaker:geo/npc/placeholder.geo.json",
-        "texture": "talesmaker:textures/npc/placeholder.png",
-        "icon": "talesmaker:textures/npc/error.png",
+        "model": "talesmaker:geo/npc/default/male.geo.json",
+        "texture": "talesmaker:textures/npc/default/male.png",
+        "icon": "talesmaker:textures/gui/icons/default/male.png",
+        "attributes":{
+            "movement_speed": 0.1
+        },
         "animations": {
-            "path": "talesmaker:animations/npc/placeholder.animation.json",
+            "path": "talesmaker:animations/npc/default/male.animation.json",
             "layers": {
                 "base": {
-                    "idle": "talesmaker.placeholder.idle",
-                    "walk": "talesmaker.placeholder.walk"
+                    "idle": "idle",
+                    "walk": "walk"
                 },
                 "override": {
                     "death": {
-                        "name": "talesmaker.placeholder.death",
+                        "name": "death",
                         "mode": "hold",
                         "duration": 20,
                         "blockHead": true
@@ -36,8 +37,8 @@
             }
         },
         "hitbox": {
-            "width": 1.5,
-            "height": 1.5
+            "width": 0.6,
+            "height": 1.8
         }
     }
 ]

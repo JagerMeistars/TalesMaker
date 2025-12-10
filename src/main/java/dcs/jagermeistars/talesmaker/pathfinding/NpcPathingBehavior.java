@@ -372,6 +372,12 @@ public class NpcPathingBehavior {
         calculator.cancel();
         executor.reset();
         clearDynamicGoals();
+
+        // Stop entity movement immediately to trigger idle animation
+        npc.setDeltaMovement(Vec3.ZERO);
+
+        // Update NpcEntity's movement state so animation system switches to idle
+        npc.setMovementState("idle");
     }
 
     /**
@@ -456,5 +462,25 @@ public class NpcPathingBehavior {
      */
     public PathingConfig getConfig() {
         return config;
+    }
+
+    /**
+     * Set the current patrol waypoint index.
+     * Used when restoring patrol state after entity load.
+     */
+    public void setPatrolIndex(int index) {
+        if (patrolGoal != null) {
+            patrolGoal.setCurrentIndex(index);
+        }
+    }
+
+    /**
+     * Get the current patrol waypoint index.
+     */
+    public int getPatrolIndex() {
+        if (patrolGoal != null) {
+            return patrolGoal.getCurrentIndex();
+        }
+        return 0;
     }
 }

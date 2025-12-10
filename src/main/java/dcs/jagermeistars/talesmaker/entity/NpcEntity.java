@@ -1,5 +1,6 @@
 package dcs.jagermeistars.talesmaker.entity;
 
+import dcs.jagermeistars.talesmaker.client.animation.AnimationValidator;
 import dcs.jagermeistars.talesmaker.data.NpcPreset;
 import dcs.jagermeistars.talesmaker.pathfinding.NpcPathingBehavior;
 import net.minecraft.core.BlockPos;
@@ -132,23 +133,36 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
     private static final EntityDataAccessor<Float> DIRECTIONAL_VEC_Z = SynchedEntityData.defineId(NpcEntity.class,
             EntityDataSerializers.FLOAT);
 
-    // Custom animation fields
+    // Custom animation fields (legacy)
     private static final EntityDataAccessor<String> CUSTOM_ANIMATION = SynchedEntityData.defineId(NpcEntity.class,
             EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> CUSTOM_ANIMATION_MODE = SynchedEntityData.defineId(NpcEntity.class,
             EntityDataSerializers.STRING); // once, loop, hold
 
+    // Animation state fields (new layered system)
+    static final EntityDataAccessor<Byte> ANIM_PACKED_STATE = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.BYTE);
+    static final EntityDataAccessor<String> ANIM_CURRENT_ID = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.STRING);
+    static final EntityDataAccessor<Integer> ANIM_START_TICK = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.INT);
+
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private String lastPlayedOnceAnimation = ""; // Track which "once" animation was played to detect completion
+    private boolean needsStateRestore = false; // Flag to restore state after loading from NBT
 
     // Handlers
     private final NpcLookHandler lookHandler;
     private final NpcPathingBehavior pathingBehavior;
+    private final NpcAnimationState animationState;
+    private final NpcAnimationManager animationManager;
 
     public NpcEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
         this.lookHandler = new NpcLookHandler(this);
         this.pathingBehavior = new NpcPathingBehavior(this);
+        this.animationState = new NpcAnimationState(this);
+        this.animationManager = new NpcAnimationManager(this);
         // AI is disabled by default
         this.setNoAi(true);
     }
@@ -163,9 +177,28 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
 
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
+                // Base attributes
                 .add(Attributes.MAX_HEALTH, 20.0D)
                 .add(Attributes.MOVEMENT_SPEED, 0.25D)
-                .add(Attributes.FOLLOW_RANGE, 16.0D);
+                .add(Attributes.FOLLOW_RANGE, 16.0D)
+                // Combat attributes
+                .add(Attributes.ATTACK_DAMAGE, 2.0D)
+                .add(Attributes.ATTACK_KNOCKBACK, 0.0D)
+                .add(Attributes.ATTACK_SPEED, 4.0D)
+                .add(Attributes.ARMOR, 0.0D)
+                .add(Attributes.ARMOR_TOUGHNESS, 0.0D)
+                // Movement attributes
+                .add(Attributes.KNOCKBACK_RESISTANCE, 0.0D)
+                .add(Attributes.JUMP_STRENGTH, 0.42D)
+                .add(Attributes.SAFE_FALL_DISTANCE, 3.0D)
+                .add(Attributes.FALL_DAMAGE_MULTIPLIER, 1.0D)
+                .add(Attributes.STEP_HEIGHT, 0.6D)
+                // Other attributes
+                .add(Attributes.MAX_ABSORPTION, 0.0D)
+                .add(Attributes.BURNING_TIME, 1.0D)
+                .add(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE, 0.0D)
+                .add(Attributes.OXYGEN_BONUS, 0.0D)
+                .add(Attributes.WATER_MOVEMENT_EFFICIENCY, 0.0D);
     }
 
     @Override
@@ -221,6 +254,10 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         // Custom animation
         builder.define(CUSTOM_ANIMATION, "");
         builder.define(CUSTOM_ANIMATION_MODE, "");
+        // Animation state (new layered system)
+        builder.define(ANIM_PACKED_STATE, (byte) 0);
+        builder.define(ANIM_CURRENT_ID, "");
+        builder.define(ANIM_START_TICK, 0);
     }
 
     @Override
@@ -249,16 +286,19 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         this.entityData.set(TEXTURE_PATH, preset.texture().toString());
         this.entityData.set(EMISSIVE_PATH, preset.emissive() != null ? preset.emissive().toString() : "");
         this.entityData.set(ANIMATION_PATH, preset.animations().path().toString());
-        this.entityData.set(IDLE_ANIM_NAME, preset.animations().idle());
-        this.entityData.set(WALK_ANIM_NAME, preset.animations().walk());
-        this.entityData.set(DEATH_ANIM_NAME, preset.animations().death().name());
-        this.entityData.set(DEATH_DURATION, preset.animations().death().durationTicks());
+        this.entityData.set(IDLE_ANIM_NAME, preset.getIdleAnimation());
+        this.entityData.set(WALK_ANIM_NAME, preset.getWalkAnimation());
+        this.entityData.set(DEATH_ANIM_NAME, preset.getDeathAnimation());
+        this.entityData.set(DEATH_DURATION, preset.getDeathDuration());
         this.entityData.set(HEAD, preset.head());
         this.entityData.set(HITBOX_WIDTH, preset.hitbox().width());
         this.entityData.set(HITBOX_HEIGHT, preset.hitbox().height());
         this.refreshDimensions();
         this.setCustomName(preset.name());
         this.setCustomNameVisible(false);
+
+        // Apply attributes from preset
+        preset.attributes().applyTo(this);
     }
 
     public void setCustomId(String customId) {
@@ -381,6 +421,15 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         compound.putFloat("MovementTargetY", this.entityData.get(MOVEMENT_TARGET_Y));
         compound.putFloat("MovementTargetZ", this.entityData.get(MOVEMENT_TARGET_Z));
         compound.putInt("MovementTargetEntityId", this.entityData.get(MOVEMENT_TARGET_ENTITY_ID));
+        // Patrol system
+        compound.putString("PatrolPoints", this.entityData.get(PATROL_POINTS));
+        compound.putInt("PatrolIndex", this.entityData.get(PATROL_INDEX));
+        // Custom animation (legacy)
+        compound.putString("CustomAnimation", this.entityData.get(CUSTOM_ANIMATION));
+        compound.putString("CustomAnimationMode", this.entityData.get(CUSTOM_ANIMATION_MODE));
+        // Animation state (new layered system)
+        compound.putByte("AnimPackedState", this.entityData.get(ANIM_PACKED_STATE));
+        compound.putString("AnimCurrentId", this.entityData.get(ANIM_CURRENT_ID));
     }
 
     @Override
@@ -509,7 +558,31 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         if (compound.contains("MovementTargetEntityId")) {
             this.entityData.set(MOVEMENT_TARGET_ENTITY_ID, compound.getInt("MovementTargetEntityId"));
         }
+        // Patrol system
+        if (compound.contains("PatrolPoints")) {
+            this.entityData.set(PATROL_POINTS, compound.getString("PatrolPoints"));
+        }
+        if (compound.contains("PatrolIndex")) {
+            this.entityData.set(PATROL_INDEX, compound.getInt("PatrolIndex"));
+        }
+        // Custom animation (legacy)
+        if (compound.contains("CustomAnimation")) {
+            this.entityData.set(CUSTOM_ANIMATION, compound.getString("CustomAnimation"));
+        }
+        if (compound.contains("CustomAnimationMode")) {
+            this.entityData.set(CUSTOM_ANIMATION_MODE, compound.getString("CustomAnimationMode"));
+        }
+        // Animation state (new layered system)
+        if (compound.contains("AnimPackedState")) {
+            this.entityData.set(ANIM_PACKED_STATE, compound.getByte("AnimPackedState"));
+        }
+        if (compound.contains("AnimCurrentId")) {
+            this.entityData.set(ANIM_CURRENT_ID, compound.getString("AnimCurrentId"));
+        }
         this.refreshDimensions();
+
+        // Mark for state restoration on next tick (movement, animation)
+        this.needsStateRestore = true;
     }
 
     @Override
@@ -521,10 +594,56 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        controllers.add(new AnimationController<>(this, "controller", 10, this::predicate));
+        // Use default transition length from config (5 ticks = ~250ms)
+        // Note: This is called before preset is loaded, so we use default value
+        // The actual transition length can be configured per-preset in animations.transitions.default
+        controllers.add(new AnimationController<>(this, "controller", 5, this::predicate));
     }
 
     private PlayState predicate(AnimationState<NpcEntity> state) {
+        // Get animation info from the new layered system
+        String animName = animationManager.getCurrentAnimationName();
+        String animMode = animationManager.getCurrentAnimationMode();
+
+        // Validate animation name exists in the animation file (client-side only)
+        ResourceLocation animationFile = getAnimationPath();
+        if (animationFile != null && animName != null && !animName.isEmpty()) {
+            AnimationValidator.validateAnimation(animationFile, animName);
+        }
+
+        // Play animation based on mode
+        switch (animMode) {
+            case "hold":
+                state.getController().setAnimation(RawAnimation.begin().thenPlayAndHold(animName));
+                break;
+            case "once":
+                // Only set the animation if it's different from what we last played
+                if (!animName.equals(lastPlayedOnceAnimation)) {
+                    state.getController().setAnimation(RawAnimation.begin().thenPlay(animName));
+                    lastPlayedOnceAnimation = animName;
+                } else if (state.getController().getAnimationState() == AnimationController.State.STOPPED) {
+                    // Animation finished playing - return to base layer
+                    lastPlayedOnceAnimation = "";
+                    animationManager.stopLayeredAnimation();
+                    // Re-get the base animation
+                    animName = animationManager.getCurrentAnimationName();
+                    state.getController().setAnimation(RawAnimation.begin().thenLoop(animName));
+                }
+                break;
+            case "loop":
+            default:
+                state.getController().setAnimation(RawAnimation.begin().thenLoop(animName));
+                break;
+        }
+
+        return PlayState.CONTINUE;
+    }
+
+    /**
+     * Legacy predicate for backwards compatibility.
+     * Used when new animation system is not configured.
+     */
+    private PlayState legacyPredicate(AnimationState<NpcEntity> state) {
         String deathAnim = this.entityData.get(DEATH_ANIM_NAME);
 
         // Play death animation if dead
@@ -565,7 +684,19 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         }
 
         // Normal movement animations
-        if (state.isMoving()) {
+        // For noAi entities: use synced MOVEMENT_STATE (not knockback velocity)
+        // For AI entities: use GeckoLib's isMoving check
+        boolean isActuallyMoving;
+        if (this.isNoAi()) {
+            // Check synced movement state - works on both client and server
+            String movementState = getMovementState();
+            isActuallyMoving = !"idle".equals(movementState) && !movementState.isEmpty();
+        } else {
+            // AI enabled - use standard movement detection
+            isActuallyMoving = state.isMoving();
+        }
+
+        if (isActuallyMoving) {
             state.getController().setAnimation(RawAnimation.begin().thenLoop(this.entityData.get(WALK_ANIM_NAME)));
         } else {
             state.getController().setAnimation(RawAnimation.begin().thenLoop(this.entityData.get(IDLE_ANIM_NAME)));
@@ -752,6 +883,45 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         this.entityData.set(PATROL_INDEX, index);
     }
 
+    /**
+     * Serialize patrol points to JSON string for NBT storage.
+     */
+    private String serializePatrolPoints(java.util.List<net.minecraft.world.phys.Vec3> points) {
+        if (points == null || points.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < points.size(); i++) {
+            if (i > 0) sb.append(";");
+            net.minecraft.world.phys.Vec3 p = points.get(i);
+            sb.append(p.x).append(",").append(p.y).append(",").append(p.z);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Deserialize patrol points from NBT string.
+     */
+    private java.util.List<net.minecraft.world.phys.Vec3> deserializePatrolPoints(String data) {
+        java.util.List<net.minecraft.world.phys.Vec3> points = new java.util.ArrayList<>();
+        if (data == null || data.isEmpty()) {
+            return points;
+        }
+        String[] parts = data.split(";");
+        for (String part : parts) {
+            String[] coords = part.split(",");
+            if (coords.length == 3) {
+                try {
+                    double x = Double.parseDouble(coords[0]);
+                    double y = Double.parseDouble(coords[1]);
+                    double z = Double.parseDouble(coords[2]);
+                    points.add(new net.minecraft.world.phys.Vec3(x, y, z));
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        return points;
+    }
+
     // Directional movement accessors
     public float getDirectionalRemaining() {
         return this.entityData.get(DIRECTIONAL_REMAINING);
@@ -797,6 +967,9 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
             return;
         }
         setMovementState("patrol");
+        // Serialize patrol points for persistence
+        setPatrolPoints(serializePatrolPoints(points));
+        setPatrolIndex(0);
         pathingBehavior.startPatrolVec3(points);
     }
 
@@ -854,6 +1027,20 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
      */
     public NpcPathingBehavior getPathingBehavior() {
         return pathingBehavior;
+    }
+
+    /**
+     * Get the animation state manager.
+     */
+    public NpcAnimationState getAnimationState() {
+        return animationState;
+    }
+
+    /**
+     * Get the animation manager (server-side logic).
+     */
+    public NpcAnimationManager getAnimationManager() {
+        return animationManager;
     }
 
     // ===== Custom animation methods =====
@@ -1015,6 +1202,12 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
     public void tick() {
         super.tick();
 
+        // Restore movement/animation state after loading from NBT (server side only, once)
+        if (!this.level().isClientSide() && needsStateRestore) {
+            needsStateRestore = false;
+            restoreStateAfterLoad();
+        }
+
         // Check player_nearby event (server side only)
         if (!this.level().isClientSide() && hasPlayerNearbyScript() && !isPlayerNearbyTriggered()) {
             float radius = getPlayerNearbyScriptRadius();
@@ -1029,14 +1222,17 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
             }
         }
 
-        // Process look-at behavior (server side only)
-        if (!this.level().isClientSide()) {
-            lookHandler.tick();
-        }
+        // Process look-at behavior (both sides for smooth interpolation)
+        lookHandler.tick();
 
         // Process pathfinding behavior (server side only)
         if (!this.level().isClientSide()) {
             pathingBehavior.tick();
+        }
+
+        // Process animation state updates (server side only)
+        if (!this.level().isClientSide()) {
+            animationManager.tick();
         }
     }
 
@@ -1065,6 +1261,85 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
 
             // Actually move the entity
             this.move(net.minecraft.world.entity.MoverType.SELF, this.getDeltaMovement());
+        }
+    }
+
+    /**
+     * Restores movement and animation state after loading from NBT.
+     * Called once on the first tick after entity is loaded.
+     */
+    private void restoreStateAfterLoad() {
+        String movementState = getMovementState();
+
+        switch (movementState) {
+            case "patrol":
+                // Restore patrol from saved points
+                String patrolData = getPatrolPoints();
+                if (!patrolData.isEmpty()) {
+                    java.util.List<Vec3> points = deserializePatrolPoints(patrolData);
+                    if (!points.isEmpty()) {
+                        int savedIndex = getPatrolIndex();
+                        pathingBehavior.startPatrolVec3(points);
+                        // Restore patrol index to continue from where we left off
+                        pathingBehavior.setPatrolIndex(savedIndex);
+                    }
+                }
+                break;
+
+            case "goto":
+                // Restore goto movement to saved target
+                float targetX = getMovementTargetX();
+                float targetY = getMovementTargetY();
+                float targetZ = getMovementTargetZ();
+                if (targetX != 0 || targetY != 0 || targetZ != 0) {
+                    pathingBehavior.moveToPosition(targetX, targetY, targetZ);
+                }
+                break;
+
+            case "follow":
+                // Restore follow - need to find entity by ID
+                int targetEntityId = getMovementTargetEntityId();
+                if (targetEntityId != -1) {
+                    net.minecraft.world.entity.Entity target = this.level().getEntity(targetEntityId);
+                    if (target != null) {
+                        pathingBehavior.startFollow(target);
+                    } else {
+                        // Target entity not found (perhaps not loaded yet or removed)
+                        // Reset to idle state
+                        setMovementState("idle");
+                    }
+                }
+                break;
+
+            default:
+                // idle or unknown state - nothing to restore
+                break;
+        }
+
+        // Restore custom animation if it was playing
+        String customAnim = getCustomAnimation();
+        String customMode = getCustomAnimationMode();
+        if (!customAnim.isEmpty() && !customMode.isEmpty()) {
+            // Animation is already set in entityData, just need to reset tracking
+            // so it starts playing from the beginning
+            this.lastPlayedOnceAnimation = "";
+        }
+
+        // Restore look-at continuous mode if it was active
+        if (isLookAtActive() && isLookAtContinuous()) {
+            int lookAtEntityId = getLookAtEntityId();
+            if (lookAtEntityId != -1) {
+                // Was following an entity - need to find it again
+                net.minecraft.world.entity.Entity target = this.level().getEntity(lookAtEntityId);
+                if (target == null) {
+                    // Target entity not found - reset look-at state
+                    stopLookAt();
+                }
+                // If target found, entityData already has the correct values,
+                // NpcLookHandler will pick up from there
+            }
+            // If looking at coordinates (entityId == -1), nothing to restore -
+            // coordinates are already loaded in entityData
         }
     }
 

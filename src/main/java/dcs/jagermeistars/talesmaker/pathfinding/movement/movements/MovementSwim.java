@@ -8,6 +8,7 @@ import dcs.jagermeistars.talesmaker.pathfinding.movement.MovementResult;
 import dcs.jagermeistars.talesmaker.pathfinding.movement.MovementState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.FluidTags;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.phys.Vec3;
@@ -19,6 +20,7 @@ public class MovementSwim extends Movement {
 
     private static final double REACH_THRESHOLD_SQ = 0.36;
     private static final int MAX_TICKS = 80;
+    private static final float BODY_ROTATION_SPEED = 0.15f;
 
     public MovementSwim(BlockPos src, BlockPos dest) {
         super(src, dest);
@@ -102,14 +104,20 @@ public class MovementSwim extends Movement {
             // Apply velocity directly
             entity.setDeltaMovement(nx * speed, ny * speed, nz * speed);
 
-            // Look towards movement direction
+            // Calculate target angles for movement direction
             double horizontalDist = Math.sqrt(dx * dx + dz * dz);
-            float yaw = (float) (Math.atan2(-dx, dz) * (180.0 / Math.PI));
-            float pitch = (float) (Math.atan2(-dy, horizontalDist) * (180.0 / Math.PI));
+            float targetYaw = (float) (Math.atan2(-dx, dz) * (180.0 / Math.PI));
+            float targetPitch = (float) (Math.atan2(-dy, horizontalDist) * (180.0 / Math.PI));
 
-            entity.setYRot(yaw);
-            entity.setXRot(pitch);
-            entity.yBodyRot = yaw;
+            // Smooth interpolation for body rotation
+            float currentYaw = entity.getYRot();
+            float currentPitch = entity.getXRot();
+            float newYaw = Mth.rotLerp(BODY_ROTATION_SPEED, currentYaw, targetYaw);
+            float newPitch = Mth.lerp(BODY_ROTATION_SPEED, currentPitch, targetPitch);
+
+            entity.setYRot(newYaw);
+            entity.setXRot(newPitch);
+            entity.yBodyRot = newYaw;
         }
     }
 }

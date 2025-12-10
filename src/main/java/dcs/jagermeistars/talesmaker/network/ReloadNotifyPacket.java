@@ -1,6 +1,7 @@
 package dcs.jagermeistars.talesmaker.network;
 
 import dcs.jagermeistars.talesmaker.TalesMaker;
+import dcs.jagermeistars.talesmaker.client.animation.AnimationValidator;
 import dcs.jagermeistars.talesmaker.client.model.NpcModel;
 import dcs.jagermeistars.talesmaker.client.notification.ResourceErrorManager;
 import net.minecraft.network.FriendlyByteBuf;
@@ -29,6 +30,7 @@ public record ReloadNotifyPacket(int presetCount, boolean hasErrors) implements 
         context.enqueueWork(() -> {
             // Clear validation cache so errors will be shown again on next render
             NpcModel.clearValidationCache();
+            AnimationValidator.clearCache();
             // Clear resource error cache to allow new errors to be displayed
             ResourceErrorManager.clearCache();
         });

@@ -2,6 +2,7 @@ package dcs.jagermeistars.talesmaker.pathfinding.movement;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.block.state.BlockState;
@@ -12,6 +13,9 @@ import net.minecraft.world.phys.Vec3;
  * Manages direct entity movement without relying on vanilla AI.
  */
 public final class MovementHelper {
+
+    // Rotation interpolation speed for movement (head and body turn together)
+    private static final float ROTATION_SPEED = 0.3f;
 
     private MovementHelper() {
         // Utility class
@@ -62,11 +66,16 @@ public final class MovementHelper {
         entity.setDeltaMovement(newVelX, currentVel.y, newVelZ);
         entity.hasImpulse = true;
 
-        // Look towards movement direction
-        float yaw = (float) (Math.atan2(-dx, dz) * (180.0 / Math.PI));
-        entity.setYRot(yaw);
-        entity.yBodyRot = yaw;
-        entity.setYHeadRot(yaw);
+        // Calculate target yaw for movement direction
+        float targetYaw = (float) (Math.atan2(-dx, dz) * (180.0 / Math.PI));
+
+        // Smooth interpolation - head and body turn together during movement
+        float currentYaw = entity.getYRot();
+        float newYaw = Mth.rotLerp(ROTATION_SPEED, currentYaw, targetYaw);
+
+        entity.setYRot(newYaw);
+        entity.yBodyRot = newYaw;
+        entity.setYHeadRot(newYaw);
     }
 
     /**
@@ -107,11 +116,16 @@ public final class MovementHelper {
                 entity.setDeltaMovement(nx * speed * 1.5, 0.42, nz * speed * 1.5);
                 entity.hasImpulse = true;
 
-                // Look towards target
-                float yaw = (float) (Math.atan2(-dx, dz) * (180.0 / Math.PI));
-                entity.setYRot(yaw);
-                entity.yBodyRot = yaw;
-                entity.setYHeadRot(yaw);
+                // Calculate target yaw for movement direction
+                float targetYaw = (float) (Math.atan2(-dx, dz) * (180.0 / Math.PI));
+
+                // Smooth interpolation - head and body turn together during movement
+                float currentYaw = entity.getYRot();
+                float newYaw = Mth.rotLerp(ROTATION_SPEED, currentYaw, targetYaw);
+
+                entity.setYRot(newYaw);
+                entity.yBodyRot = newYaw;
+                entity.setYHeadRot(newYaw);
             }
         }
     }

@@ -3,6 +3,7 @@
   "error.talesmaker.missing_model": "Missing model",
   "error.talesmaker.missing_texture": "Missing texture",
   "error.talesmaker.missing_animation": "Missing animation",
+  "error.talesmaker.missing_animation_name": "Animation not found",
   "key.talesmaker.history": "Open Dialogue History",
   "key.talesmaker.interact": "Interact",
   "key.categories.talesmaker": "TalesMaker",

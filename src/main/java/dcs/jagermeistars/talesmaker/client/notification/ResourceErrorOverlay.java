@@ -81,7 +81,7 @@ public class ResourceErrorOverlay {
             if (error.count() > 1) {
                 sb.append(error.count()).append("x ");
             }
-            sb.append(translatedType).append(": ").append(error.path().toString());
+            sb.append(translatedType).append(": ").append(error.getDisplayPath());
             String displayText = sb.toString();
 
             // Calculate width based on text

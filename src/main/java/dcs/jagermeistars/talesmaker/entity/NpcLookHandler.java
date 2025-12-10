@@ -10,6 +10,11 @@ import net.minecraft.world.phys.Vec3;
  */
 public class NpcLookHandler {
 
+    // Interpolation speeds (0.0-1.0, where 1.0 = instant)
+    private static final float HEAD_ROTATION_SPEED = 0.3f;   // Head rotates faster
+    private static final float BODY_ROTATION_SPEED = 0.05f;  // Body follows much slower
+    private static final float ROTATION_THRESHOLD = 1.0f;    // Degrees tolerance for completion
+
     private final NpcEntity npc;
 
     public NpcLookHandler(NpcEntity npc) {
@@ -49,6 +54,7 @@ public class NpcLookHandler {
 
     /**
      * Updates the look-at behavior. Called every tick when look-at is active.
+     * Uses smooth interpolation to avoid uncanny valley effect.
      */
     public void tick() {
         if (!npc.isLookAtActive()) {
@@ -73,15 +79,28 @@ public class NpcLookHandler {
         // Clamp pitch to reasonable limits
         targetPitch = Mth.clamp(targetPitch, -85.0F, 85.0F);
 
-        // Rotate both body and head to look at target
-        npc.setYRot(targetYaw);
-        npc.yBodyRot = targetYaw;
-        npc.yHeadRot = targetYaw;
-        npc.setXRot(targetPitch);
+        // Current angles
+        float currentBodyYaw = npc.getYRot();
+        float currentPitch = npc.getXRot();
 
-        // If once mode - deactivate after this tick
+        // Smooth interpolation - head rotates faster than body
+        float newHeadYaw = Mth.rotLerp(HEAD_ROTATION_SPEED, npc.yHeadRot, targetYaw);
+        float newPitch = Mth.lerp(HEAD_ROTATION_SPEED, currentPitch, targetPitch);
+        float newBodyYaw = Mth.rotLerp(BODY_ROTATION_SPEED, currentBodyYaw, targetYaw);
+
+        // Apply rotation
+        npc.yHeadRot = newHeadYaw;
+        npc.setXRot(newPitch);
+        npc.setYRot(newBodyYaw);
+        npc.yBodyRot = newBodyYaw;
+
+        // For "once" mode - deactivate only when target is reached
         if (!npc.isLookAtContinuous()) {
-            npc.setLookAtActive(false);
+            float headYawDiff = Math.abs(Mth.wrapDegrees(newHeadYaw - targetYaw));
+            float pitchDiff = Math.abs(newPitch - targetPitch);
+            if (headYawDiff < ROTATION_THRESHOLD && pitchDiff < ROTATION_THRESHOLD) {
+                npc.setLookAtActive(false);
+            }
         }
     }
 

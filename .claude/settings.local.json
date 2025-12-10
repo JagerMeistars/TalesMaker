@@ -3,7 +3,11 @@
     "allow": [
       "Bash(rm:*)",
       "Bash(mkdir:*)",
-      "Bash(./gradlew build:*)"
+      "Bash(./gradlew build:*)",
+      "Bash(xargs grep:*)",
+      "Bash(./gradlew compileJava:*)",
+      "Bash(./gradlew clean build:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

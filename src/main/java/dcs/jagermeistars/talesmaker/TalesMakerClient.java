@@ -1,5 +1,6 @@
 package dcs.jagermeistars.talesmaker;
 
+import dcs.jagermeistars.talesmaker.client.animation.AnimationValidator;
 import dcs.jagermeistars.talesmaker.client.dialogue.DialogueHistory;
 import dcs.jagermeistars.talesmaker.client.dialogue.DialogueHistoryScreen;
 import dcs.jagermeistars.talesmaker.client.model.NpcModel;
@@ -71,6 +72,7 @@ public class TalesMakerClient {
     private void onPlayerLoggedIn(ClientPlayerNetworkEvent.LoggingIn event) {
         // Clear cache when joining a world
         NpcModel.clearValidationCache();
+        AnimationValidator.clearCache();
         // Clear resource error cache to allow new errors to be displayed
         ResourceErrorManager.clearCache();
 

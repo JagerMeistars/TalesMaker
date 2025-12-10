@@ -96,14 +96,6 @@ public class TalesMakerCommands {
                                         .then(Commands.argument("id", StringArgumentType.word())
                                                 .suggests(NPC_ID_SUGGESTIONS)
                                                 .executes(TalesMakerCommands::removeNpc)))
-                                // /talesmaker npc list
-                                .then(Commands.literal("list")
-                                        .executes(TalesMakerCommands::listNpcs))
-                                // /talesmaker npc info <id>
-                                .then(Commands.literal("info")
-                                        .then(Commands.argument("id", StringArgumentType.word())
-                                                .suggests(NPC_ID_SUGGESTIONS)
-                                                .executes(TalesMakerCommands::npcInfo)))
                                 // /talesmaker npc set ...
                                 .then(Commands.literal("set")
                                         .then(Commands.literal("script")
@@ -764,82 +756,6 @@ public class TalesMakerCommands {
         return 1;
     }
 
-    // ===== NPC List =====
-
-    private static int listNpcs(CommandContext<CommandSourceStack> context) {
-        CommandSourceStack source = context.getSource();
-
-        if (!(source.getLevel() instanceof ServerLevel serverLevel)) {
-            source.sendFailure(Component.literal("This command can only be used in a server world"));
-            return 0;
-        }
-
-        var npcs = serverLevel.getEntities(ModEntities.NPC.get(), npc -> !npc.getCustomId().isEmpty());
-
-        if (npcs.isEmpty()) {
-            source.sendSuccess(() -> Component.literal("No NPCs found in this world"), false);
-            return 1;
-        }
-
-        source.sendSuccess(() -> Component.literal("NPCs in world (" + npcs.size() + "):"), false);
-        for (NpcEntity npc : npcs) {
-            String id = npc.getCustomId();
-            String name = npc.getNpcName().getString();
-            int x = (int) npc.getX();
-            int y = (int) npc.getY();
-            int z = (int) npc.getZ();
-            boolean ai = npc.isAiEnabled();
-            boolean invul = npc.isInvulnerable();
-
-            source.sendSuccess(() -> Component.literal("  - " + id + " (" + name + ") at " + x + ", " + y + ", " + z +
-                    (ai ? " [AI]" : "") + (invul ? " [Invulnerable]" : "")), false);
-        }
-        return 1;
-    }
-
-    // ===== NPC Info =====
-
-    private static int npcInfo(CommandContext<CommandSourceStack> context) {
-        CommandSourceStack source = context.getSource();
-        String npcId = StringArgumentType.getString(context, "id");
-
-        if (!(source.getLevel() instanceof ServerLevel serverLevel)) {
-            source.sendFailure(Component.literal("This command can only be used in a server world"));
-            return 0;
-        }
-
-        // Find NPC by custom ID
-        NpcEntity npc = serverLevel.getEntities(ModEntities.NPC.get(), entity -> npcId.equals(entity.getCustomId()))
-                .stream().findFirst().orElse(null);
-
-        if (npc == null) {
-            source.sendFailure(Component.literal("NPC with id '" + npcId + "' not found"));
-            return 0;
-        }
-
-        source.sendSuccess(() -> Component.literal("=== NPC Info: " + npcId + " ==="), false);
-        source.sendSuccess(() -> Component.literal("Name: ").append(npc.getNpcName()), false);
-        source.sendSuccess(() -> Component.literal("Position: " + (int) npc.getX() + ", " + (int) npc.getY() + ", " + (int) npc.getZ()), false);
-        source.sendSuccess(() -> Component.literal("AI Enabled: " + npc.isAiEnabled()), false);
-        source.sendSuccess(() -> Component.literal("Invulnerable: " + npc.isInvulnerable()), false);
-
-        ResourceLocation presetId = npc.getPresetResourceLocation();
-        if (presetId != null) {
-            source.sendSuccess(() -> Component.literal("Preset: " + presetId), false);
-        }
-
-        String scriptType = npc.getScriptType();
-        String scriptCmd = npc.getScriptCommand();
-        if (scriptType != null && !scriptType.isEmpty()) {
-            source.sendSuccess(() -> Component.literal("Script Type: " + scriptType), false);
-            if (scriptCmd != null && !scriptCmd.isEmpty()) {
-                source.sendSuccess(() -> Component.literal("Script Command: " + scriptCmd), false);
-            }
-        }
-
-        return 1;
-    }
-
     // ===== NPC Set Invulnerable =====
 
     private static int setInvulnerable(CommandContext<CommandSourceStack> context) {
@@ -1164,7 +1080,8 @@ public class TalesMakerCommands {
             return 0;
         }
 
-        npc.playAnimation(animation, "once");
+        // Use new animation system
+        npc.getAnimationManager().playCustomAnimation(animation, "once");
         source.sendSuccess(() -> Component.translatable("commands.talesmaker.anim.play.success",
                 npcId,
                 animation,
@@ -1198,7 +1115,8 @@ public class TalesMakerCommands {
             return 0;
         }
 
-        npc.playAnimation(animation, mode);
+        // Use new animation system
+        npc.getAnimationManager().playCustomAnimation(animation, mode);
         source.sendSuccess(() -> Component.translatable("commands.talesmaker.anim.play.success",
                 npcId,
                 animation,
@@ -1224,7 +1142,8 @@ public class TalesMakerCommands {
             return 0;
         }
 
-        npc.stopAnimation();
+        // Use new animation system
+        npc.getAnimationManager().stopCustomAnimation();
         source.sendSuccess(() -> Component.translatable("commands.talesmaker.anim.stop.success", npcId), true);
         return 1;
     }
