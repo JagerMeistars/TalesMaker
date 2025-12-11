@@ -64,8 +64,6 @@ public class MovementExecutor {
      * @return result of this tick
      */
     public MovementResult tick(MovementContext ctx) {
-        System.out.println("[MovementExecutor] tick() called - finished=" + finished + " failed=" + failed +
-            " currentPath=" + (currentPath != null) + " currentMovement=" + (currentMovement != null ? currentMovement.getClass().getSimpleName() : "null"));
 
         if (finished) {
             return MovementResult.SUCCESS;
@@ -74,7 +72,6 @@ public class MovementExecutor {
             return MovementResult.FAILED;
         }
         if (currentPath == null || currentMovement == null) {
-            System.out.println("[MovementExecutor] FAILED: path or movement is null");
             return MovementResult.FAILED;
         }
 

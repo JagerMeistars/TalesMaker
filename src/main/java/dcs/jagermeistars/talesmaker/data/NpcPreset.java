@@ -24,7 +24,8 @@ public record NpcPreset(
         NpcAnimationConfig animations,
         String head,
         HitboxConfig hitbox,
-        AttributesConfig attributes) {
+        AttributesConfig attributes,
+        ItemSlotsConfig itemSlots) {
 
     // ===== Hitbox Config =====
 
@@ -91,7 +92,8 @@ public record NpcPreset(
             Map<String, NpcAnimationConfig.OverrideEntry> overrides;
             if (death.name() != null && !death.name().isEmpty()) {
                 overrides = Map.of("death", new NpcAnimationConfig.OverrideEntry(
-                        death.name(), "hold", death.durationTicks(), true));
+                        new NpcAnimationConfig.AnimationVariants(death.name(), Map.of(), 0),
+                        "hold", death.durationTicks(), true));
             } else {
                 overrides = Map.of();
             }
@@ -145,10 +147,11 @@ public record NpcPreset(
             ANIMATION_CONFIG_CODEC.fieldOf("animations").forGetter(NpcPreset::animations),
             Codec.STRING.optionalFieldOf("head", "head").forGetter(NpcPreset::head),
             HitboxConfig.CODEC.optionalFieldOf("hitbox", HitboxConfig.DEFAULT).forGetter(NpcPreset::hitbox),
-            AttributesConfig.CODEC.optionalFieldOf("attributes", AttributesConfig.DEFAULT).forGetter(NpcPreset::attributes))
-            .apply(instance, (id, name, icon, model, texture, emissive, animations, head, hitbox, attributes) ->
+            AttributesConfig.CODEC.optionalFieldOf("attributes", AttributesConfig.DEFAULT).forGetter(NpcPreset::attributes),
+            ItemSlotsConfig.CODEC.optionalFieldOf("itemSlots", ItemSlotsConfig.DEFAULT).forGetter(NpcPreset::itemSlots))
+            .apply(instance, (id, name, icon, model, texture, emissive, animations, head, hitbox, attributes, itemSlots) ->
                     new NpcPreset(null, name, icon.orElse(null), model, texture, emissive.orElse(null),
-                            animations, head, hitbox, attributes)));
+                            animations, head, hitbox, attributes, itemSlots)));
 
     // ===== Helper methods =====
 
@@ -156,7 +159,7 @@ public record NpcPreset(
      * Create preset with full ResourceLocation ID.
      */
     public NpcPreset withId(ResourceLocation fullId) {
-        return new NpcPreset(fullId, name, icon, model, texture, emissive, animations, head, hitbox, attributes);
+        return new NpcPreset(fullId, name, icon, model, texture, emissive, animations, head, hitbox, attributes, itemSlots);
     }
 
     // ===== Convenience getters for backwards compatibility =====

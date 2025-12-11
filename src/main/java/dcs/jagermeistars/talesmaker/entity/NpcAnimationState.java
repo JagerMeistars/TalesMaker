@@ -1,14 +1,16 @@
 package dcs.jagermeistars.talesmaker.entity;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Lightweight runtime animation state for NPC entities.
  * Manages current animation layer states and conditions.
  * Uses packed data for efficient network synchronization.
  *
- * Note: EntityDataAccessors are defined in NpcEntity (ANIM_PACKED_STATE, ANIM_CURRENT_ID, ANIM_START_TICK)
+ * Note: EntityDataAccessors are defined in NpcEntity (ANIM_PACKED_STATE, ANIM_CURRENT_ID, ANIM_START_TICK, ANIM_CONDITIONS)
  * to avoid index conflicts with SynchedEntityData.
  */
 public class NpcAnimationState {
@@ -33,7 +35,6 @@ public class NpcAnimationState {
     // ===== Instance Fields =====
 
     private final NpcEntity entity;
-    private final Set<String> conditions = new HashSet<>();
 
     // Cached values for quick access
     private byte cachedPackedState = 0;
@@ -170,12 +171,33 @@ public class NpcAnimationState {
     }
 
     // ===== Conditions System =====
+    // Conditions are stored as comma-separated string in ANIM_CONDITIONS for network sync
+
+    /**
+     * Get raw conditions string from synced data.
+     */
+    private String getConditionsString() {
+        return entity.getEntityData().get(NpcEntity.ANIM_CONDITIONS);
+    }
+
+    /**
+     * Set raw conditions string to synced data.
+     */
+    private void setConditionsString(String conditionsStr) {
+        entity.getEntityData().set(NpcEntity.ANIM_CONDITIONS, conditionsStr != null ? conditionsStr : "");
+    }
 
     /**
      * Get current conditions set (for variant selection).
      */
     public Set<String> getConditions() {
-        return conditions;
+        String str = getConditionsString();
+        if (str == null || str.isEmpty()) {
+            return Set.of();
+        }
+        return Arrays.stream(str.split(","))
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toSet());
     }
 
     /**
@@ -183,7 +205,10 @@ public class NpcAnimationState {
      */
     public void addCondition(String condition) {
         if (condition != null && !condition.isEmpty()) {
-            conditions.add(condition);
+            Set<String> current = new HashSet<>(getConditions());
+            if (current.add(condition)) {
+                setConditionsString(String.join(",", current));
+            }
         }
     }
 
@@ -191,21 +216,24 @@ public class NpcAnimationState {
      * Remove a condition.
      */
     public void removeCondition(String condition) {
-        conditions.remove(condition);
+        Set<String> current = new HashSet<>(getConditions());
+        if (current.remove(condition)) {
+            setConditionsString(String.join(",", current));
+        }
     }
 
     /**
      * Check if condition is active.
      */
     public boolean hasCondition(String condition) {
-        return conditions.contains(condition);
+        return getConditions().contains(condition);
     }
 
     /**
      * Clear all conditions.
      */
     public void clearConditions() {
-        conditions.clear();
+        setConditionsString("");
     }
 
     // ===== High-Level Animation Control =====

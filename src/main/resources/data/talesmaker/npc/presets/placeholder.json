@@ -10,6 +10,7 @@
         "model": "talesmaker:geo/npc/placeholder.geo.json",
         "texture": "talesmaker:textures/npc/placeholder.png",
         "icon": "talesmaker:textures/npc/error.png",
+        "emissive": "talesmaker:textures/npc/placeholder.png",
         "animations": {
             "path": "talesmaker:animations/npc/placeholder.animation.json",
             "layers": {

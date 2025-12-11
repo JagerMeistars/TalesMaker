@@ -93,7 +93,6 @@ public class PathCalculator {
 
             if (error != null) {
                 // Log error but don't crash
-                System.err.println("[TalesMaker] Pathfinding error: " + error.getMessage());
                 scheduleCallback(level, () -> onComplete.accept(null));
             } else {
                 scheduleCallback(level, () -> onComplete.accept(path));

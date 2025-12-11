@@ -57,12 +57,7 @@ public class MovementTraverse extends Movement {
 
                 // Debug every 10 ticks
                 if (getTicksInState() % 10 == 0) {
-                    System.out.println("[Movement DEBUG] Traverse: from=" + src + " to=" + dest +
-                        ", current=(" + String.format("%.2f", currentPos.x) + ", " +
-                        String.format("%.2f", currentPos.y) + ", " +
-                        String.format("%.2f", currentPos.z) + ")" +
-                        ", velocity=" + ctx.getEntity().getDeltaMovement() +
-                        ", onGround=" + ctx.isOnGround());
+                    //System.out.println("[MovementTraverse] RUNNING: currentPos=" + currentPos + " targetPos=" + targetPos);
                 }
 
                 // Check if we've reached the destination

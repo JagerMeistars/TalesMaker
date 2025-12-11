@@ -25,6 +25,7 @@ import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import javax.annotation.Nullable;
 import net.minecraft.world.level.Level;
@@ -146,6 +147,15 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
             EntityDataSerializers.STRING);
     static final EntityDataAccessor<Integer> ANIM_START_TICK = SynchedEntityData.defineId(NpcEntity.class,
             EntityDataSerializers.INT);
+    // Animation conditions (comma-separated string for sync: "mainhand,offhand")
+    static final EntityDataAccessor<String> ANIM_CONDITIONS = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.STRING);
+
+    // Inventory fields
+    private static final EntityDataAccessor<ItemStack> MAINHAND_ITEM = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.ITEM_STACK);
+    private static final EntityDataAccessor<ItemStack> OFFHAND_ITEM = SynchedEntityData.defineId(NpcEntity.class,
+            EntityDataSerializers.ITEM_STACK);
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private String lastPlayedOnceAnimation = ""; // Track which "once" animation was played to detect completion
@@ -258,6 +268,10 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         builder.define(ANIM_PACKED_STATE, (byte) 0);
         builder.define(ANIM_CURRENT_ID, "");
         builder.define(ANIM_START_TICK, 0);
+        builder.define(ANIM_CONDITIONS, "");
+        // Inventory
+        builder.define(MAINHAND_ITEM, ItemStack.EMPTY);
+        builder.define(OFFHAND_ITEM, ItemStack.EMPTY);
     }
 
     @Override
@@ -323,6 +337,16 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         }
     }
 
+    /**
+     * Get the NpcPreset for this entity from the preset manager.
+     * Returns null if preset is not found or preset ID is not set.
+     */
+    public NpcPreset getPreset() {
+        ResourceLocation presetId = getPresetResourceLocation();
+        if (presetId == null) return null;
+        return dcs.jagermeistars.talesmaker.TalesMaker.PRESET_MANAGER.getPreset(presetId).orElse(null);
+    }
+
     public String getHead() {
         return this.entityData.get(HEAD);
     }
@@ -374,6 +398,51 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    // ===== Inventory methods =====
+
+    public ItemStack getMainHandItemStack() {
+        return this.entityData.get(MAINHAND_ITEM);
+    }
+
+    public void setMainHandItemStack(ItemStack stack) {
+        this.entityData.set(MAINHAND_ITEM, stack != null ? stack.copy() : ItemStack.EMPTY);
+    }
+
+    public ItemStack getOffhandItemStack() {
+        return this.entityData.get(OFFHAND_ITEM);
+    }
+
+    public void setOffhandItemStack(ItemStack stack) {
+        this.entityData.set(OFFHAND_ITEM, stack != null ? stack.copy() : ItemStack.EMPTY);
+    }
+
+    // Override vanilla equipment slot methods to use our synced inventory
+    @Override
+    public ItemStack getItemBySlot(net.minecraft.world.entity.EquipmentSlot slot) {
+        if (slot == net.minecraft.world.entity.EquipmentSlot.MAINHAND) {
+            return getMainHandItemStack();
+        } else if (slot == net.minecraft.world.entity.EquipmentSlot.OFFHAND) {
+            return getOffhandItemStack();
+        }
+        return super.getItemBySlot(slot);
+    }
+
+    @Override
+    public void setItemSlot(net.minecraft.world.entity.EquipmentSlot slot, ItemStack stack) {
+        if (slot == net.minecraft.world.entity.EquipmentSlot.MAINHAND) {
+            setMainHandItemStack(stack);
+        } else if (slot == net.minecraft.world.entity.EquipmentSlot.OFFHAND) {
+            setOffhandItemStack(stack);
+        } else {
+            super.setItemSlot(slot, stack);
+        }
+    }
+
+    @Override
+    public Iterable<ItemStack> getHandSlots() {
+        return java.util.List.of(getMainHandItemStack(), getOffhandItemStack());
     }
 
     @Override
@@ -430,6 +499,15 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         // Animation state (new layered system)
         compound.putByte("AnimPackedState", this.entityData.get(ANIM_PACKED_STATE));
         compound.putString("AnimCurrentId", this.entityData.get(ANIM_CURRENT_ID));
+        // Inventory
+        ItemStack mainhand = getMainHandItemStack();
+        if (!mainhand.isEmpty()) {
+            compound.put("MainhandItem", mainhand.save(this.level().registryAccess()));
+        }
+        ItemStack offhand = getOffhandItemStack();
+        if (!offhand.isEmpty()) {
+            compound.put("OffhandItem", offhand.save(this.level().registryAccess()));
+        }
     }
 
     @Override
@@ -578,6 +656,15 @@ public class NpcEntity extends PathfinderMob implements GeoEntity {
         }
         if (compound.contains("AnimCurrentId")) {
             this.entityData.set(ANIM_CURRENT_ID, compound.getString("AnimCurrentId"));
+        }
+        // Inventory
+        if (compound.contains("MainhandItem")) {
+            ItemStack.parse(this.level().registryAccess(), compound.getCompound("MainhandItem"))
+                    .ifPresent(this::setMainHandItemStack);
+        }
+        if (compound.contains("OffhandItem")) {
+            ItemStack.parse(this.level().registryAccess(), compound.getCompound("OffhandItem"))
+                    .ifPresent(this::setOffhandItemStack);
         }
         this.refreshDimensions();
 

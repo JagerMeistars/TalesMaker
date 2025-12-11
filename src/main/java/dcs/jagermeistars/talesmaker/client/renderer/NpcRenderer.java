@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
+import dcs.jagermeistars.talesmaker.client.renderer.layer.NpcHeldItemLayer;
 import software.bernie.geckolib.renderer.GeoEntityRenderer;
 import software.bernie.geckolib.renderer.layer.GeoRenderLayer;
 
@@ -27,6 +28,9 @@ public class NpcRenderer extends GeoEntityRenderer<NpcEntity> {
     public NpcRenderer(EntityRendererProvider.Context renderManager) {
         super(renderManager, new NpcModel());
         this.shadowRadius = 0.4F;
+
+        // Add held item layer for rendering items in NPC hands
+        addRenderLayer(new NpcHeldItemLayer(this));
 
         // Add emissive layer
         addRenderLayer(new GeoRenderLayer<>(this) {

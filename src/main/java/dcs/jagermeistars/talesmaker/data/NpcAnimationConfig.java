@@ -2,6 +2,7 @@ package dcs.jagermeistars.talesmaker.data;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import dcs.jagermeistars.talesmaker.client.animation.AnimationValidator;
 import net.minecraft.resources.ResourceLocation;
 
 import javax.annotation.Nullable;
@@ -84,17 +85,66 @@ public record NpcAnimationConfig(
 
         /**
          * Get animation name for given conditions.
+         * Fallback chain: variant -> default -> placeholder
          */
         public String getAnimation(java.util.Set<String> conditions) {
+            return getAnimation(conditions, defaultAnim);
+        }
+
+        /**
+         * Get animation name for given conditions with custom placeholder.
+         * Fallback chain: variant -> default -> placeholder
+         * Does NOT validate animation existence - use getValidatedAnimation for that.
+         */
+        public String getAnimation(java.util.Set<String> conditions, String placeholder) {
+            // Try to find a matching variant
             if (conditions != null && !conditions.isEmpty()) {
                 for (String condition : conditions) {
                     String variant = variants.get(condition);
-                    if (variant != null) {
+                    if (variant != null && !variant.isEmpty()) {
                         return variant;
                     }
                 }
             }
-            return defaultAnim;
+            // Fall back to default if available
+            if (defaultAnim != null && !defaultAnim.isEmpty()) {
+                return defaultAnim;
+            }
+            // Fall back to placeholder
+            return placeholder;
+        }
+
+        /**
+         * Get animation name with validation against animation file.
+         * Fallback chain: variant (if exists in file) -> default (always, no check) -> placeholder
+         * Client-side only - validates variant existence in GeckoLibCache.
+         *
+         * @param conditions Active conditions for variant selection
+         * @param placeholder Fallback animation name if default is not specified
+         * @param animationFile The animation file to validate variants against
+         * @return Animation name: validated variant, or default from preset, or placeholder
+         */
+        public String getValidatedAnimation(java.util.Set<String> conditions, String placeholder,
+                                            net.minecraft.resources.ResourceLocation animationFile) {
+            // Try to find a matching variant that exists in file
+            if (conditions != null && !conditions.isEmpty()) {
+                for (String condition : conditions) {
+                    String variant = variants.get(condition);
+                    if (variant != null && !variant.isEmpty()) {
+                        // Validate variant exists in animation file
+                        if (AnimationValidator.validateAnimation(animationFile, variant)) {
+                            return variant;
+                        }
+                        // Variant doesn't exist in file - fall back to default
+                    }
+                }
+            }
+            // Fall back to default from preset (trust that it exists, no validation)
+            if (defaultAnim != null && !defaultAnim.isEmpty()) {
+                return defaultAnim;
+            }
+            // Fall back to placeholder only if default is not specified
+            return placeholder;
         }
     }
 
@@ -113,19 +163,34 @@ public record NpcAnimationConfig(
 
     /**
      * Override layer animation entry (highest priority).
+     * Supports variants like base animations.
      */
     public record OverrideEntry(
-            String name,
+            AnimationVariants animation,
             String mode,
             int duration,
             boolean blockHead
     ) {
         public static final Codec<OverrideEntry> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                Codec.STRING.fieldOf("name").forGetter(OverrideEntry::name),
+                AnimationVariants.CODEC.fieldOf("name").forGetter(OverrideEntry::animation),
                 Codec.STRING.optionalFieldOf("mode", "hold").forGetter(OverrideEntry::mode),
                 Codec.INT.optionalFieldOf("duration", 40).forGetter(OverrideEntry::duration),
                 Codec.BOOL.optionalFieldOf("blockHead", true).forGetter(OverrideEntry::blockHead)
         ).apply(instance, OverrideEntry::new));
+
+        /**
+         * Get animation name for given conditions.
+         */
+        public String getName(java.util.Set<String> conditions) {
+            return animation.getAnimation(conditions);
+        }
+
+        /**
+         * Get default animation name (backwards compatibility).
+         */
+        public String name() {
+            return animation.defaultAnim();
+        }
     }
 
     /**
@@ -246,27 +311,57 @@ public record NpcAnimationConfig(
     // ===== Helper methods =====
 
     /**
-     * Get idle animation name for given conditions.
+     * Get idle animation name for given conditions (no validation).
+     * Fallback chain: variant -> default -> "idle"
      */
     public String getIdleAnimation(java.util.Set<String> conditions) {
-        return layers.base().idle().getAnimation(conditions);
+        return layers.base().idle().getAnimation(conditions, "idle");
     }
 
     /**
-     * Get walk animation name for given conditions.
+     * Get idle animation name with file validation (client-side only).
+     * Fallback chain: variant (if exists in file) -> default -> "idle"
+     */
+    public String getValidatedIdleAnimation(java.util.Set<String> conditions) {
+        return layers.base().idle().getValidatedAnimation(conditions, "idle", path());
+    }
+
+    /**
+     * Get walk animation name for given conditions (no validation).
+     * Fallback chain: variant -> default -> "walk"
      */
     public String getWalkAnimation(java.util.Set<String> conditions) {
-        return layers.base().walk().getAnimation(conditions);
+        return layers.base().walk().getAnimation(conditions, "walk");
     }
 
     /**
-     * Get run animation name for given conditions, or walk if run is not defined.
+     * Get walk animation name with file validation (client-side only).
+     * Fallback chain: variant (if exists in file) -> default -> "walk"
+     */
+    public String getValidatedWalkAnimation(java.util.Set<String> conditions) {
+        return layers.base().walk().getValidatedAnimation(conditions, "walk", path());
+    }
+
+    /**
+     * Get run animation name for given conditions, or walk if run is not defined (no validation).
+     * Fallback chain: variant -> default -> "run" -> walk animation
      */
     public String getRunAnimation(java.util.Set<String> conditions) {
         if (layers.base().run() != null) {
-            return layers.base().run().getAnimation(conditions);
+            return layers.base().run().getAnimation(conditions, "run");
         }
         return getWalkAnimation(conditions);
+    }
+
+    /**
+     * Get run animation name with file validation (client-side only).
+     * Fallback chain: variant (if exists in file) -> default -> "run" -> validated walk
+     */
+    public String getValidatedRunAnimation(java.util.Set<String> conditions) {
+        if (layers.base().run() != null) {
+            return layers.base().run().getValidatedAnimation(conditions, "run", path());
+        }
+        return getValidatedWalkAnimation(conditions);
     }
 
     /**

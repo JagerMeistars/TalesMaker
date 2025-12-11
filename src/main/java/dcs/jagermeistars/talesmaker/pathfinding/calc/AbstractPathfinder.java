@@ -117,16 +117,6 @@ public class AbstractPathfinder {
         int y = current.getY();
         int z = current.getZ();
 
-        // Debug first 3 expansions
-        if (debugCount < 3) {
-            System.out.println("[Pathfinding DEBUG] Expanding node at: " + x + ", " + y + ", " + z);
-            System.out.println("[Pathfinding DEBUG]   Cardinal checks:");
-            System.out.println("[Pathfinding DEBUG]   +X: canStand=" + context.canStandAt(x+1, y, z));
-            System.out.println("[Pathfinding DEBUG]   -X: canStand=" + context.canStandAt(x-1, y, z));
-            System.out.println("[Pathfinding DEBUG]   +Z: canStand=" + context.canStandAt(x, y, z+1));
-            System.out.println("[Pathfinding DEBUG]   -Z: canStand=" + context.canStandAt(x, y, z-1));
-            debugCount++;
-        }
 
         // Cardinal directions
         tryMove(current, x + 1, y, z, ActionCosts.WALK);

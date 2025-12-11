@@ -80,6 +80,9 @@ public class NpcAnimationManager {
             return;
         }
 
+        // Update item-based conditions
+        updateItemConditions(state);
+
         boolean isMoving = isEntityMoving();
         boolean isRunning = false;
 
@@ -92,6 +95,48 @@ public class NpcAnimationManager {
         }
 
         state.updateBaseAnimation(isMoving, isRunning);
+    }
+
+    /**
+     * Update animation conditions based on held items.
+     * Adds/removes: mainhand, offhand, both_hands
+     */
+    private void updateItemConditions(NpcAnimationState state) {
+        boolean hasMainhand = !entity.getMainHandItemStack().isEmpty();
+        boolean hasOffhand = !entity.getOffhandItemStack().isEmpty();
+
+        // mainhand = mainhand only
+        if (hasMainhand && !hasOffhand) {
+            if (!state.hasCondition("mainhand")) {
+                state.removeCondition("offhand");
+                state.removeCondition("both_hands");
+                state.addCondition("mainhand");
+            }
+        }
+        // offhand = offhand only
+        else if (!hasMainhand && hasOffhand) {
+            if (!state.hasCondition("offhand")) {
+                state.removeCondition("mainhand");
+                state.removeCondition("both_hands");
+                state.addCondition("offhand");
+            }
+        }
+        // both_hands = both hands
+        else if (hasMainhand && hasOffhand) {
+            if (!state.hasCondition("both_hands")) {
+                state.removeCondition("mainhand");
+                state.removeCondition("offhand");
+                state.addCondition("both_hands");
+            }
+        }
+        // No items
+        else {
+            if (state.hasCondition("mainhand") || state.hasCondition("offhand") || state.hasCondition("both_hands")) {
+                state.removeCondition("mainhand");
+                state.removeCondition("offhand");
+                state.removeCondition("both_hands");
+            }
+        }
     }
 
     /**
@@ -337,7 +382,7 @@ public class NpcAnimationManager {
             String overrideId = state.getCurrentAnimId();
             NpcAnimationConfig.OverrideEntry override = config.getOverride(overrideId);
             if (override != null) {
-                return override.name();
+                return override.getName(state.getConditions());
             }
         }
 
@@ -358,10 +403,20 @@ public class NpcAnimationManager {
             }
         }
 
-        // Base layer
+        // Base layer - use validated methods on client to check animation existence
         byte baseType = state.getBaseAnimationType();
         var conditions = state.getConditions();
 
+        // Client-side: validate animations exist in file, fallback to default if not
+        if (entity.level().isClientSide()) {
+            return switch (baseType) {
+                case NpcAnimationState.BASE_WALK -> config.getValidatedWalkAnimation(conditions);
+                case NpcAnimationState.BASE_RUN -> config.getValidatedRunAnimation(conditions);
+                default -> config.getValidatedIdleAnimation(conditions);
+            };
+        }
+
+        // Server-side: use non-validated methods (no GeckoLibCache access)
         return switch (baseType) {
             case NpcAnimationState.BASE_WALK -> config.getWalkAnimation(conditions);
             case NpcAnimationState.BASE_RUN -> config.getRunAnimation(conditions);
