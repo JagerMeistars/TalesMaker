@@ -50,6 +50,25 @@ public class ModNetworking {
                 InteractScriptPacket.STREAM_CODEC,
                 InteractScriptPacket::handle
         );
+
+        // Choice system packets
+        registrar.playToClient(
+                OpenChoicePacket.TYPE,
+                OpenChoicePacket.STREAM_CODEC,
+                OpenChoicePacket::handle
+        );
+
+        registrar.playToServer(
+                SelectChoicePacket.TYPE,
+                SelectChoicePacket.STREAM_CODEC,
+                SelectChoicePacket::handle
+        );
+
+        registrar.playToServer(
+                CloseChoicePacket.TYPE,
+                CloseChoicePacket.STREAM_CODEC,
+                CloseChoicePacket::handle
+        );
     }
 
     public static void sendNotificationToPlayer(ServerPlayer player, String message, int type) {

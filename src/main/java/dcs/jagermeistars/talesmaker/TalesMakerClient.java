@@ -1,6 +1,7 @@
 package dcs.jagermeistars.talesmaker;
 
 import dcs.jagermeistars.talesmaker.client.animation.AnimationValidator;
+import dcs.jagermeistars.talesmaker.client.choice.ChoiceCameraController;
 import dcs.jagermeistars.talesmaker.client.dialogue.DialogueHistory;
 import dcs.jagermeistars.talesmaker.client.dialogue.DialogueHistoryScreen;
 import dcs.jagermeistars.talesmaker.client.model.NpcModel;
@@ -23,6 +24,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -53,6 +55,7 @@ public class TalesMakerClient {
         NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
         NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedOut);
         NeoForge.EVENT_BUS.addListener(this::onClientTick);
+        NeoForge.EVENT_BUS.addListener(this::onRenderTick);
     }
 
     @EventBusSubscriber(modid = TalesMaker.MODID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
@@ -89,8 +92,16 @@ public class TalesMakerClient {
         DialogueHistory.onWorldLeave();
     }
 
+    private void onRenderTick(RenderFrameEvent.Pre event) {
+        // Update camera animation every frame for smooth movement
+        ChoiceCameraController.renderTick(event.getPartialTick().getGameTimeDeltaPartialTick(true));
+    }
+
     private void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
+
+        // Update choice camera controller (for state management, not animation)
+        ChoiceCameraController.tick();
 
         if (HISTORY_KEY.consumeClick()) {
             if (mc.screen == null) {

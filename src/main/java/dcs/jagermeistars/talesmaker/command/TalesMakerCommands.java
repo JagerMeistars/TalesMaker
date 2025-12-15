@@ -9,12 +9,15 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import dcs.jagermeistars.talesmaker.TalesMaker;
 import dcs.jagermeistars.talesmaker.data.NpcPreset;
+import dcs.jagermeistars.talesmaker.data.choice.Choice;
+import dcs.jagermeistars.talesmaker.data.choice.ChoiceWindow;
 import dcs.jagermeistars.talesmaker.entity.NpcEntity;
 import dcs.jagermeistars.talesmaker.init.ModEntities;
 import dcs.jagermeistars.talesmaker.monologue.MonologueManager;
 import dcs.jagermeistars.talesmaker.network.ClearHistoryPacket;
 import dcs.jagermeistars.talesmaker.network.DialoguePacket;
 import dcs.jagermeistars.talesmaker.network.DialogueTimesPacket;
+import dcs.jagermeistars.talesmaker.network.OpenChoicePacket;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -70,6 +73,13 @@ public class TalesMakerCommands {
 
     private static final SuggestionProvider<CommandSourceStack> ANIM_MODE_SUGGESTIONS = (context, builder) -> {
         return SharedSuggestionProvider.suggest(new String[]{"once", "loop", "hold"}, builder);
+    };
+
+    private static final SuggestionProvider<CommandSourceStack> CHOICE_SUGGESTIONS = (context, builder) -> {
+        return SharedSuggestionProvider.suggest(
+                TalesMaker.CHOICE_MANAGER.getAllWindows().keySet().stream()
+                        .map(ResourceLocation::toString),
+                builder);
     };
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext buildContext) {
@@ -240,7 +250,14 @@ public class TalesMakerCommands {
                         .then(Commands.literal("history")
                                 // /talesmaker history clear
                                 .then(Commands.literal("clear")
-                                        .executes(TalesMakerCommands::historyClear))));
+                                        .executes(TalesMakerCommands::historyClear)))
+                        // /talesmaker choice <players> <speaker> <window_id>
+                        .then(Commands.literal("choice")
+                                .then(Commands.argument("players", EntityArgument.players())
+                                        .then(Commands.argument("speaker", EntityArgument.entity())
+                                                .then(Commands.argument("window_id", ResourceLocationArgument.id())
+                                                        .suggests(CHOICE_SUGGESTIONS)
+                                                        .executes(TalesMakerCommands::openChoice))))));
     }
 
     private static int createNpcAtPos(CommandContext<CommandSourceStack> context) {
@@ -1146,5 +1163,140 @@ public class TalesMakerCommands {
         npc.getAnimationManager().stopCustomAnimation();
         source.sendSuccess(() -> Component.translatable("commands.talesmaker.anim.stop.success", npcId), true);
         return 1;
+    }
+
+    // ===== Choice Commands =====
+
+    private static int openChoice(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        var players = EntityArgument.getPlayers(context, "players");
+        Entity speaker = EntityArgument.getEntity(context, "speaker");
+        ResourceLocation windowId = ResourceLocationArgument.getId(context, "window_id");
+
+        // Load choice window
+        ChoiceWindow window = TalesMaker.CHOICE_MANAGER.getWindow(windowId).orElse(null);
+        if (window == null) {
+            source.sendFailure(Component.literal("Unknown choice window: " + windowId));
+            return 0;
+        }
+
+        // Get speaker name
+        Component speakerName;
+        if (speaker instanceof NpcEntity npc) {
+            speakerName = npc.getNpcName();
+        } else {
+            speakerName = speaker.getDisplayName();
+        }
+
+        int count = 0;
+        for (ServerPlayer player : players) {
+            // Evaluate conditions and build client choices
+            java.util.List<OpenChoicePacket.ClientChoice> clientChoices = new java.util.ArrayList<>();
+
+            for (Choice choice : window.choices()) {
+                // Check hidden condition
+                if (choice.hidden().isPresent()) {
+                    Choice.HiddenCondition hidden = choice.hidden().get();
+                    if (!evaluateCondition(player, hidden.predicate(), hidden.advancement())) {
+                        // Choice is hidden - don't include it
+                        continue;
+                    }
+                }
+
+                // Check locked condition
+                boolean locked = false;
+                Component lockedMessage = null;
+                if (choice.locked().isPresent()) {
+                    Choice.LockedCondition lockedCond = choice.locked().get();
+                    if (!evaluateCondition(player, lockedCond.predicate(), lockedCond.advancement())) {
+                        locked = true;
+                        lockedMessage = lockedCond.message();
+                    }
+                }
+
+                clientChoices.add(new OpenChoicePacket.ClientChoice(choice.text(), locked, lockedMessage));
+            }
+
+            // Send packet to player
+            OpenChoicePacket packet = new OpenChoicePacket(
+                    windowId,
+                    speaker.getId(),
+                    speakerName,
+                    window.text(),
+                    clientChoices,
+                    window.mode(),
+                    window.timer(),
+                    window.timeoutChoice()
+            );
+            PacketDistributor.sendToPlayer(player, packet);
+            count++;
+        }
+
+        int finalCount = count;
+        source.sendSuccess(() -> Component.literal("Opened choice window '" + windowId + "' for " + finalCount + " player(s)"), true);
+        return count;
+    }
+
+    /**
+     * Evaluate predicate and/or advancement conditions for a player.
+     *
+     * @return true if conditions are met (choice should be shown/unlocked)
+     */
+    private static boolean evaluateCondition(ServerPlayer player,
+            java.util.Optional<ResourceLocation> predicate,
+            java.util.Optional<ResourceLocation> advancement) {
+
+        // If neither condition is set, always pass
+        if (predicate.isEmpty() && advancement.isEmpty()) {
+            return true;
+        }
+
+        // Check predicate
+        if (predicate.isPresent()) {
+            ResourceLocation predicateId = predicate.get();
+            var lootData = player.server.reloadableRegistries().get();
+            var predicateHolder = lootData.lookup(net.minecraft.core.registries.Registries.PREDICATE)
+                    .flatMap(registry -> registry.get(net.minecraft.resources.ResourceKey.create(
+                            net.minecraft.core.registries.Registries.PREDICATE, predicateId)));
+
+            if (predicateHolder.isPresent()) {
+                net.minecraft.world.level.storage.loot.LootContext lootContext = buildLootContext(player);
+                if (!predicateHolder.get().value().test(lootContext)) {
+                    return false;
+                }
+            } else {
+                TalesMaker.LOGGER.warn("Predicate not found: {}", predicateId);
+                return false;
+            }
+        }
+
+        // Check advancement
+        if (advancement.isPresent()) {
+            ResourceLocation advancementId = advancement.get();
+            var advancementHolder = player.server.getAdvancements().get(advancementId);
+            if (advancementHolder != null) {
+                var progress = player.getAdvancements().getOrStartProgress(advancementHolder);
+                if (!progress.isDone()) {
+                    return false;
+                }
+            } else {
+                TalesMaker.LOGGER.warn("Advancement not found: {}", advancementId);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Build a LootContext for predicate evaluation.
+     */
+    private static net.minecraft.world.level.storage.loot.LootContext buildLootContext(ServerPlayer player) {
+        return new net.minecraft.world.level.storage.loot.LootContext.Builder(
+                new net.minecraft.world.level.storage.loot.LootParams.Builder(player.serverLevel())
+                        .withParameter(net.minecraft.world.level.storage.loot.parameters.LootContextParams.THIS_ENTITY, player)
+                        .withParameter(net.minecraft.world.level.storage.loot.parameters.LootContextParams.ORIGIN, player.position())
+                        .create(net.minecraft.world.level.storage.loot.parameters.LootContextParamSets.SELECTOR)
+        ).create(java.util.Optional.empty());
     }
 }
