@@ -69,6 +69,19 @@ public class ModNetworking {
                 CloseChoicePacket.STREAM_CODEC,
                 CloseChoicePacket::handle
         );
+
+        // Clue inspection system packets
+        registrar.playToClient(
+                OpenCluePacket.TYPE,
+                OpenCluePacket.STREAM_CODEC,
+                OpenCluePacket::handle
+        );
+
+        registrar.playToServer(
+                DiscoverCluePacket.TYPE,
+                DiscoverCluePacket.STREAM_CODEC,
+                DiscoverCluePacket::handle
+        );
     }
 
     public static void sendNotificationToPlayer(ServerPlayer player, String message, int type) {

@@ -11,6 +11,8 @@ import dcs.jagermeistars.talesmaker.TalesMaker;
 import dcs.jagermeistars.talesmaker.data.NpcPreset;
 import dcs.jagermeistars.talesmaker.data.choice.Choice;
 import dcs.jagermeistars.talesmaker.data.choice.ChoiceWindow;
+import dcs.jagermeistars.talesmaker.data.clue.CluePreset;
+import dcs.jagermeistars.talesmaker.server.ClueSessionManager;
 import dcs.jagermeistars.talesmaker.entity.NpcEntity;
 import dcs.jagermeistars.talesmaker.init.ModEntities;
 import dcs.jagermeistars.talesmaker.monologue.MonologueManager;
@@ -18,6 +20,7 @@ import dcs.jagermeistars.talesmaker.network.ClearHistoryPacket;
 import dcs.jagermeistars.talesmaker.network.DialoguePacket;
 import dcs.jagermeistars.talesmaker.network.DialogueTimesPacket;
 import dcs.jagermeistars.talesmaker.network.OpenChoicePacket;
+import dcs.jagermeistars.talesmaker.network.OpenCluePacket;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -78,6 +81,13 @@ public class TalesMakerCommands {
     private static final SuggestionProvider<CommandSourceStack> CHOICE_SUGGESTIONS = (context, builder) -> {
         return SharedSuggestionProvider.suggest(
                 TalesMaker.CHOICE_MANAGER.getAllWindows().keySet().stream()
+                        .map(ResourceLocation::toString),
+                builder);
+    };
+
+    private static final SuggestionProvider<CommandSourceStack> CLUE_SUGGESTIONS = (context, builder) -> {
+        return SharedSuggestionProvider.suggest(
+                TalesMaker.CLUE_MANAGER.getAllPresets().keySet().stream()
                         .map(ResourceLocation::toString),
                 builder);
     };
@@ -257,7 +267,13 @@ public class TalesMakerCommands {
                                         .then(Commands.argument("speaker", EntityArgument.entity())
                                                 .then(Commands.argument("window_id", ResourceLocationArgument.id())
                                                         .suggests(CHOICE_SUGGESTIONS)
-                                                        .executes(TalesMakerCommands::openChoice))))));
+                                                        .executes(TalesMakerCommands::openChoice)))))
+                        // /talesmaker clue <players> <preset_id>
+                        .then(Commands.literal("clue")
+                                .then(Commands.argument("players", EntityArgument.players())
+                                        .then(Commands.argument("preset_id", ResourceLocationArgument.id())
+                                                .suggests(CLUE_SUGGESTIONS)
+                                                .executes(TalesMakerCommands::openClue)))));
     }
 
     private static int createNpcAtPos(CommandContext<CommandSourceStack> context) {
@@ -1234,6 +1250,57 @@ public class TalesMakerCommands {
 
         int finalCount = count;
         source.sendSuccess(() -> Component.literal("Opened choice window '" + windowId + "' for " + finalCount + " player(s)"), true);
+        return count;
+    }
+
+    // ===== Clue Commands =====
+
+    private static int openClue(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        var players = EntityArgument.getPlayers(context, "players");
+        ResourceLocation presetId = ResourceLocationArgument.getId(context, "preset_id");
+
+        // Load clue preset
+        CluePreset preset = TalesMaker.CLUE_MANAGER.getPreset(presetId).orElse(null);
+        if (preset == null) {
+            source.sendFailure(Component.literal("Unknown clue preset: " + presetId));
+            return 0;
+        }
+
+        int count = 0;
+        for (ServerPlayer player : players) {
+            // Start session on server
+            ClueSessionManager.startSession(player, preset);
+
+            // Build client clue data
+            java.util.List<OpenCluePacket.ClientClueData> clientClues = new java.util.ArrayList<>();
+            for (CluePreset.ClueData clue : preset.clues()) {
+                clientClues.add(new OpenCluePacket.ClientClueData(
+                        clue.bone(),
+                        clue.name(),
+                        clue.description(),
+                        clue.command().orElse(null)
+                ));
+            }
+
+            // Send packet to player
+            OpenCluePacket packet = new OpenCluePacket(
+                    presetId,
+                    preset.name(),
+                    preset.belonging().orElse(null),
+                    preset.description(),
+                    preset.model(),
+                    preset.texture(),
+                    preset.getDiscoverySound(),
+                    clientClues,
+                    preset.onComplete().orElse(null)
+            );
+            PacketDistributor.sendToPlayer(player, packet);
+            count++;
+        }
+
+        int finalCount = count;
+        source.sendSuccess(() -> Component.literal("Opened clue inspection '" + presetId + "' for " + finalCount + " player(s)"), true);
         return count;
     }
 

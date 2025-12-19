@@ -1,7 +1,6 @@
 [
     {
         "id": "default/male",
-        "head": "head",
         "name": {
             "text": "default/male"
         },

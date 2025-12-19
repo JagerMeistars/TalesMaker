@@ -1,10 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./gradlew build:*)",
-      "Bash(mv:*)",
-      "Bash(mkdir:*)",
-      "Bash(rm:*)"
-    ]
+      "Bash(gradlew build:*)",
+      "Bash(./TalesMaker/gradlew build:*)",
+      "Bash(java:*)",
+      "Bash(where:*)",
+      "Bash(cat:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(JAVA_HOME=\"/c/Program Files/Eclipse Adoptium/jdk-21.0.9.10-hotspot\" ./TalesMaker/gradlew build:*)",
+      "Bash(JAVA_HOME=\"/c/Program Files/Eclipse Adoptium/jdk-21.0.9.10-hotspot\" ./gradlew build:*)",
+      "Bash(find:*)",
+      "Bash(dir /s \"c:\\\\Users\\\\SR\\\\Documents\\\\mods\\\\TalesMaker\\\\.gradle\\\\repositories\")",
+      "Bash(dir:*)",
+      "Bash(git -C \"c:\\\\Users\\\\SR\\\\Documents\\\\mods\\\\TalesMaker\" log --all --source --oneline --grep=\"TalesMaker-1.21.1\")",
+      "Bash(./gradlew:*)"
+    ],
+    "deny": [],
+    "ask": []
   }
 }
