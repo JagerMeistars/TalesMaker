@@ -2,20 +2,34 @@
     {
         "id": "default/male",
         "name": {
-            "text": "default/male"
+            "text": "Default/male"
         },
         "model": "talesmaker:geo/npc/default/male.geo.json",
         "texture": "talesmaker:textures/npc/default/male.png",
         "icon": "talesmaker:textures/gui/icons/default/male.png",
         "attributes":{
-            "movement_speed": 0.1
+            "movement_speed": 0.17
         },
         "animations": {
             "path": "talesmaker:animations/npc/default/male.animation.json",
             "layers": {
                 "base": {
-                    "idle": "idle",
-                    "walk": "walk"
+                    "idle": {
+                        "default": "idle",
+                        "variants": {
+                            "mainhand": "idle.mainhand",
+                            "offhand": "idle.offhand",
+                            "both_hands": "idle.bothhands"
+                        }
+                    },
+                    "walk": {
+                        "default": "walk",
+                        "variants": {
+                            "mainhand": "walk.mainhand",
+                            "offhand": "walk.offhand",
+                            "both_hands": "walk.bothhands"
+                        }
+                    }
                 },
                 "override": {
                     "death": {
@@ -26,18 +40,81 @@
                     }
                 }
             },
-            "transitions": 5,
+            "transitions": 15,
             "headTracking": {
                 "enabled": true,
                 "bone": "head",
                 "mode": "replace",
-                "maxYaw": 70,
-                "maxPitch": 40
+                "maxYaw": 360,
+                "maxPitch": 360
             }
         },
         "hitbox": {
             "width": 0.6,
             "height": 1.8
-        }
+        },
+        "itemSlots": {
+            "mainhand": "right_item",
+            "offhand": "left_item"
+        } 
+    },
+    {
+        "id": "default/female",
+        "name": {
+            "text": "Default/female"
+        },
+        "model": "talesmaker:geo/npc/default/female.geo.json",
+        "texture": "talesmaker:textures/npc/default/female.png",
+        "icon": "talesmaker:textures/gui/icons/default/female.png",
+        "attributes":{
+            "movement_speed": 0.17
+        },
+        "animations": {
+            "path": "talesmaker:animations/npc/default/female.animation.json",
+            "layers": {
+                "base": {
+                    "idle": {
+                        "default": "idle",
+                        "variants": {
+                            "mainhand": "idle.mainhand",
+                            "offhand": "idle.offhand",
+                            "both_hands": "idle.bothhands"
+                        }
+                    },
+                    "walk": {
+                        "default": "walk",
+                        "variants": {
+                            "mainhand": "walk.mainhand",
+                            "offhand": "walk.offhand",
+                            "both_hands": "walk.bothhands"
+                        }
+                    }
+                },
+                "override": {
+                    "death": {
+                        "name": "death",
+                        "mode": "hold",
+                        "duration": 20,
+                        "blockHead": true
+                    }
+                }
+            },
+            "transitions": 15,
+            "headTracking": {
+                "enabled": true,
+                "bone": "head",
+                "mode": "replace",
+                "maxYaw": 360,
+                "maxPitch": 360
+            }
+        },
+        "hitbox": {
+            "width": 0.6,
+            "height": 1.8
+        },
+        "itemSlots": {
+            "mainhand": "right_item",
+            "offhand": "left_item"
+        } 
     }
 ]

@@ -1,0 +1,28 @@
+{
+  "name": {
+    "text": "Тест"
+  },
+  "belonging": {
+    "text": "Dev"
+  },
+  "description": {
+    "text": "Нажмите на красный куб"
+  },
+  "model": "talesmaker:models/clue/test.json",
+  "texture": "talesmaker:textures/clue/test.png",
+  "sound": "minecraft:entity.experience_orb.pickup",
+  "model_scale": 10.0,
+  "clues": [
+    {
+      "name": {
+        "text": "Красный куб"
+      },
+      "bone": "a",
+      "description": {
+        "text": "Простой красный куб"
+      },
+      "command": "say a"
+    }
+  ],
+  "on_complete": "say a--"
+}

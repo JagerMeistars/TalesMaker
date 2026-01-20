@@ -1,6 +1,8 @@
 package dcs.jagermeistars.talesmaker;
 
 import dcs.jagermeistars.talesmaker.client.animation.AnimationValidator;
+import dcs.jagermeistars.talesmaker.client.bind.BindCommands;
+import dcs.jagermeistars.talesmaker.client.bind.BindManager;
 import dcs.jagermeistars.talesmaker.client.choice.ChoiceCameraController;
 import dcs.jagermeistars.talesmaker.client.dialogue.DialogueHistory;
 import dcs.jagermeistars.talesmaker.client.dialogue.DialogueHistoryScreen;
@@ -23,6 +25,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -56,6 +59,7 @@ public class TalesMakerClient {
         NeoForge.EVENT_BUS.addListener(this::onPlayerLoggedOut);
         NeoForge.EVENT_BUS.addListener(this::onClientTick);
         NeoForge.EVENT_BUS.addListener(this::onRenderTick);
+        NeoForge.EVENT_BUS.addListener(this::onRegisterClientCommands);
     }
 
     @EventBusSubscriber(modid = TalesMaker.MODID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
@@ -86,6 +90,7 @@ public class TalesMakerClient {
         } else if (mc.getSingleplayerServer() != null) {
             DialogueHistory.onWorldJoin(mc.getSingleplayerServer().getWorldData().getLevelName());
         }
+        BindManager.load();
     }
 
     private void onPlayerLoggedOut(ClientPlayerNetworkEvent.LoggingOut event) {
@@ -97,11 +102,16 @@ public class TalesMakerClient {
         ChoiceCameraController.renderTick(event.getPartialTick().getGameTimeDeltaPartialTick(true));
     }
 
+    private void onRegisterClientCommands(RegisterClientCommandsEvent event) {
+        BindCommands.register(event.getDispatcher());
+    }
+
     private void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
 
         // Update choice camera controller (for state management, not animation)
         ChoiceCameraController.tick();
+        BindManager.tick();
 
         if (HISTORY_KEY.consumeClick()) {
             if (mc.screen == null) {
@@ -152,3 +162,11 @@ public class TalesMakerClient {
         return closestNpc;
     }
 }
+
+
+
+
+
+
+
+

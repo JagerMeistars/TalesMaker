@@ -26,6 +26,7 @@ public record OpenCluePacket(
         ResourceLocation model,
         ResourceLocation texture,
         ResourceLocation sound,
+        Float modelScale,
         List<ClientClueData> clues,
         String onComplete         // Can be null
 ) implements CustomPacketPayload {
@@ -67,6 +68,7 @@ public record OpenCluePacket(
                 ResourceLocation.STREAM_CODEC.encode(buf, packet.model());
                 ResourceLocation.STREAM_CODEC.encode(buf, packet.texture());
                 ResourceLocation.STREAM_CODEC.encode(buf, packet.sound());
+                ByteBufCodecs.optional(ByteBufCodecs.FLOAT).encode(buf, Optional.ofNullable(packet.modelScale()));
                 ClientClueData.STREAM_CODEC.apply(ByteBufCodecs.list()).encode(buf, packet.clues());
                 ByteBufCodecs.optional(ByteBufCodecs.STRING_UTF8).encode(buf, Optional.ofNullable(packet.onComplete()));
             },
@@ -78,6 +80,7 @@ public record OpenCluePacket(
                     ResourceLocation.STREAM_CODEC.decode(buf),
                     ResourceLocation.STREAM_CODEC.decode(buf),
                     ResourceLocation.STREAM_CODEC.decode(buf),
+                    ByteBufCodecs.optional(ByteBufCodecs.FLOAT).decode(buf).orElse(null),
                     ClientClueData.STREAM_CODEC.apply(ByteBufCodecs.list()).decode(buf),
                     ByteBufCodecs.optional(ByteBufCodecs.STRING_UTF8).decode(buf).orElse(null)
             )
@@ -102,6 +105,7 @@ public record OpenCluePacket(
                     packet.model(),
                     packet.texture(),
                     packet.sound(),
+                    packet.modelScale(),
                     packet.clues(),
                     packet.onComplete()
             ));

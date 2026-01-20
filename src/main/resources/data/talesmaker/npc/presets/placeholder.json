@@ -3,20 +3,34 @@
         "id": "placeholder",
         "head": "head",
         "name": {
-            "text": "Placeholder NPC",
-            "color": "aqua",
-            "bold": true
+            "text": "placeholder"
         },
         "model": "talesmaker:geo/npc/placeholder.geo.json",
         "texture": "talesmaker:textures/npc/placeholder.png",
         "icon": "talesmaker:textures/npc/error.png",
-        "emissive": "talesmaker:textures/npc/placeholder.png",
+        "attributes":{
+            "movement_speed": 0.17
+        },
         "animations": {
             "path": "talesmaker:animations/npc/placeholder.animation.json",
             "layers": {
                 "base": {
-                    "idle": "talesmaker.placeholder.idle",
-                    "walk": "talesmaker.placeholder.walk"
+                    "idle": {
+                        "default": "talesmaker.placeholder.idle",
+                        "variants": {
+                            "mainhand": "talesmaker.placeholder.idle",
+                            "offhand": "talesmaker.placeholder.idle",
+                            "both_hands": "talesmaker.placeholder.idle"
+                        }
+                    },
+                    "walk": {
+                        "default": "talesmaker.placeholder.walk",
+                        "variants": {
+                            "mainhand": "talesmaker.placeholder.walk",
+                            "offhand": "talesmaker.placeholder.walk",
+                            "both_hands": "talesmaker.placeholder.walk"
+                        }
+                    }
                 },
                 "override": {
                     "death": {
@@ -27,18 +41,22 @@
                     }
                 }
             },
-            "transitions": 5,
+            "transitions": 15,
             "headTracking": {
                 "enabled": true,
                 "bone": "head",
                 "mode": "replace",
-                "maxYaw": 70,
-                "maxPitch": 40
+                "maxYaw": 360,
+                "maxPitch": 360
             }
         },
         "hitbox": {
-            "width": 1.5,
-            "height": 1.5
-        }
+            "width": 0.6,
+            "height": 1.8
+        },
+        "itemSlots": {
+            "mainhand": "right_item",
+            "offhand": "left_item"
+        } 
     }
 ]

@@ -1,0 +1,50 @@
+{
+  "text": {
+    "text": "What would you like to buy today, traveler?"
+  },
+  "mode": "dialog",
+  "choices": [
+    {
+      "text": {
+        "text": "Show me your finest weapons"
+      },
+      "command": "say @s chose to view weapons"
+    },
+    {
+      "text": {
+        "text": "I need some potions"
+      },
+      "command": "say @s chose to view potions"
+    },
+    {
+      "text": {
+        "text": "Do you have any rare items?",
+        "color": "gold"
+      },
+      "command": "say @s asked about rare items",
+      "locked": {
+        "advancement": "minecraft:story/mine_diamond",
+        "message": {
+          "text": "You need to prove yourself worthy first (mine diamonds)",
+          "color": "red"
+        }
+      }
+    },
+    {
+      "text": {
+        "text": "Secret black market goods",
+        "color": "dark_purple"
+      },
+      "command": "say @s accessed the secret option",
+      "hidden": {
+        "advancement": "minecraft:nether/return_to_sender"
+      }
+    },
+    {
+      "text": {
+        "text": "Nothing, thanks"
+      },
+      "command": "say @s declined to buy anything"
+    }
+  ]
+}

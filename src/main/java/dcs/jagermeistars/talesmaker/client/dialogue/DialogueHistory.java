@@ -25,7 +25,8 @@ public class DialogueHistory {
             String npcName,
             String icon,
             String message,
-            long timestamp
+            long timestamp,
+            String entryType
     ) {}
 
     public static void addEntry(Component npcName, ResourceLocation icon, Component message) {
@@ -33,7 +34,22 @@ public class DialogueHistory {
                 Component.Serializer.toJson(npcName, Minecraft.getInstance().level.registryAccess()),
                 icon != null ? icon.toString() : "",
                 Component.Serializer.toJson(message, Minecraft.getInstance().level.registryAccess()),
-                System.currentTimeMillis()
+                System.currentTimeMillis(),
+                "dialogue"
+        );
+        history.add(entry);
+        save();
+    }
+
+    public static void addChoiceEntry(Component choiceText) {
+        Component speaker = Component.literal("");
+        Component message = Component.translatable("gui.talesmaker.choice_selected", choiceText);
+        HistoryEntry entry = new HistoryEntry(
+                Component.Serializer.toJson(speaker, Minecraft.getInstance().level.registryAccess()),
+                "talesmaker:textures/gui/icons/feather.png",
+                Component.Serializer.toJson(message, Minecraft.getInstance().level.registryAccess()),
+                System.currentTimeMillis(),
+                "choice"
         );
         history.add(entry);
         save();
@@ -132,5 +148,12 @@ public class DialogueHistory {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    public static boolean isChoiceEntry(HistoryEntry entry) {
+        if (entry == null || entry.entryType() == null) {
+            return false;
+        }
+        return "choice".equals(entry.entryType());
     }
 }

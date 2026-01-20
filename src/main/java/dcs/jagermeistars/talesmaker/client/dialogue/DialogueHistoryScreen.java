@@ -1,6 +1,5 @@
 package dcs.jagermeistars.talesmaker.client.dialogue;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import dcs.jagermeistars.talesmaker.TalesMakerClient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -15,19 +14,14 @@ import java.util.List;
 
 public class DialogueHistoryScreen extends Screen {
 
-    // Custom background texture - the texture should match the panel size (e.g., 210x280 or use 256x256 and stretch)
-    private static final ResourceLocation CUSTOM_BACKGROUND =
-            ResourceLocation.fromNamespaceAndPath("talesmaker", "textures/gui/history.png");
-    // Texture dimensions (should match your PNG file)
-    private static final int TEXTURE_WIDTH = 256;
-    private static final int TEXTURE_HEIGHT = 256;
-
     private static final int PADDING = 6;
-    private static final int LINE_HEIGHT = 11;
     private static final int ENTRY_SPACING = 4;
     private static final int ICON_SIZE = 16;
     private static final int PADDING_H = 6;
     private static final int ENTRY_PADDING = 4;  // Padding inside entry panel
+    private static final int BASE_WIDTH = 960;
+    private static final int BASE_HEIGHT = 540;
+    private static final float PANEL_SCALE = 0.85f;
 
     private int scrollOffset = 0;
     private List<DialogueHistory.HistoryEntry> entries;
@@ -39,6 +33,12 @@ public class DialogueHistoryScreen extends Screen {
     private int panelTop;
     private int panelWidth;
     private int panelHeight;
+    private float uiScale = 1.0f;
+    private int scaledPadding;
+    private int scaledEntrySpacing;
+    private int scaledIconSize;
+    private int scaledPaddingH;
+    private int scaledEntryPadding;
 
     private record RenderedEntry(ResourceLocation icon, List<FormattedCharSequence> lines, int height) {}
 
@@ -52,10 +52,20 @@ public class DialogueHistoryScreen extends Screen {
     protected void init() {
         super.init();
         entries = DialogueHistory.getHistory();
+        uiScale = Math.max(0.7f, calculateUiScale() * PANEL_SCALE);
+        scaledPadding = scaleInt(PADDING);
+        scaledEntrySpacing = scaleInt(ENTRY_SPACING);
+        scaledIconSize = scaleInt(ICON_SIZE);
+        scaledPaddingH = scaleInt(PADDING_H);
+        scaledEntryPadding = scaleInt(ENTRY_PADDING);
 
         // Panel centered, compact width, taller
-        panelWidth = Math.min(210, width - 40);
-        panelHeight = Math.min(280, height - 40);
+        int maxPanelWidth = Math.max(1, width - scaleInt(40));
+        int minPanelWidth = Math.min(scaleInt(160), maxPanelWidth);
+        panelWidth = Math.max(minPanelWidth, Math.min(scaleInt(210), maxPanelWidth));
+        int maxPanelHeight = Math.max(1, height - scaleInt(40));
+        int minPanelHeight = Math.min(scaleInt(200), maxPanelHeight);
+        panelHeight = Math.max(minPanelHeight, Math.min(scaleInt(280), maxPanelHeight));
         panelLeft = (width - panelWidth) / 2;
         panelTop = (height - panelHeight) / 2;
 
@@ -63,7 +73,7 @@ public class DialogueHistoryScreen extends Screen {
         rebuildRenderedEntries();
 
         // Scroll to bottom to show latest entries
-        int contentAreaHeight = panelHeight - 30 - PADDING;
+        int contentAreaHeight = panelHeight - scaleInt(30) - scaledPadding;
         scrollOffset = Math.max(0, totalContentHeight - contentAreaHeight);
     }
 
@@ -72,25 +82,30 @@ public class DialogueHistoryScreen extends Screen {
         totalContentHeight = 0;
 
         // Width for text inside entry panel (must match render calculation)
-        int entryPanelWidth = panelWidth - PADDING * 2 - 20;  // 10px margin on each side
-        int textWidth = entryPanelWidth - ICON_SIZE - PADDING_H - ENTRY_PADDING * 2;
+        int entryPanelWidth = panelWidth - scaledPadding * 2 - scaleInt(20);  // 10px margin on each side
+        int textWidth = entryPanelWidth - scaledIconSize - scaledPaddingH - scaledEntryPadding * 2;
 
         for (DialogueHistory.HistoryEntry entry : entries) {
             Component npcName = DialogueHistory.parseNpcName(entry);
             Component message = DialogueHistory.parseMessage(entry);
             ResourceLocation icon = DialogueHistory.parseIcon(entry);
 
-            Component fullText = Component.empty()
-                    .append(Component.literal("[").withStyle(npcName.getStyle()))
-                    .append(npcName)
-                    .append(Component.literal("]").withStyle(npcName.getStyle()))
-                    .append(Component.literal(": "))
-                    .append(message);
+            Component fullText;
+            if (DialogueHistory.isChoiceEntry(entry)) {
+                fullText = message;
+            } else {
+                fullText = Component.empty()
+                        .append(Component.literal("[").withStyle(npcName.getStyle()))
+                        .append(npcName)
+                        .append(Component.literal("]").withStyle(npcName.getStyle()))
+                        .append(Component.literal(": "))
+                        .append(message);
+            }
 
             List<FormattedCharSequence> lines = font.split(fullText, textWidth);
-            int entryHeight = Math.max(ICON_SIZE, lines.size() * LINE_HEIGHT) + ENTRY_PADDING * 2;
+            int entryHeight = Math.max(scaledIconSize, lines.size() * font.lineHeight) + scaledEntryPadding * 2;
             renderedEntries.add(new RenderedEntry(icon, lines, entryHeight));
-            totalContentHeight += entryHeight + ENTRY_SPACING;
+            totalContentHeight += entryHeight + scaledEntrySpacing;
         }
     }
 
@@ -104,17 +119,8 @@ public class DialogueHistoryScreen extends Screen {
         // Render darkened world background
         renderBackground(graphics, mouseX, mouseY, partialTick);
 
-        // Panel background using texture (single image, not tiled)
-        if (CUSTOM_BACKGROUND != null) {
-            // Custom texture: blit(texture, x, y, u, v, width, height, textureWidth, textureHeight)
-            // Use the full texture (0,0 to textureWidth,textureHeight) and stretch it to panel size
-            RenderSystem.enableBlend();
-            graphics.blit(CUSTOM_BACKGROUND, panelLeft, panelTop, panelWidth, panelHeight, 0, 0, TEXTURE_WIDTH, TEXTURE_HEIGHT, TEXTURE_WIDTH, TEXTURE_HEIGHT);
-            RenderSystem.disableBlend();
-        } else {
-            // Fallback to tiled menu background
-            graphics.blit(Screen.MENU_BACKGROUND, panelLeft, panelTop, panelLeft, panelTop, panelWidth, panelHeight, 32, 32);
-        }
+        // Panel background (no texture)
+        graphics.fill(panelLeft, panelTop, panelLeft + panelWidth, panelTop + panelHeight, 0xCC000000);
 
         // Inner border (darker)
         graphics.fill(panelLeft, panelTop, panelLeft + panelWidth, panelTop + 1, 0xFF000000);
@@ -125,8 +131,8 @@ public class DialogueHistoryScreen extends Screen {
         // Title - "История"
         graphics.drawCenteredString(font, title, panelLeft + panelWidth / 2, panelTop + 7, 0xFFFFFF);
 
-        int contentTop = panelTop + 25;
-        int contentBottom = panelTop + panelHeight - PADDING;
+        int contentTop = panelTop + scaleInt(25);
+        int contentBottom = panelTop + panelHeight - scaledPadding;
         int contentHeight = contentBottom - contentTop;
 
         if (entries.isEmpty()) {
@@ -136,10 +142,10 @@ public class DialogueHistoryScreen extends Screen {
         }
 
         // Enable scissor to clip entries
-        graphics.enableScissor(panelLeft + PADDING, contentTop, panelLeft + panelWidth - PADDING, contentBottom);
+        graphics.enableScissor(panelLeft + scaledPadding, contentTop, panelLeft + panelWidth - scaledPadding, contentBottom);
 
         // Entry panel: centered in the entire panel (ignoring scrollbar for centering)
-        int entryPanelWidth = panelWidth - PADDING * 2 - 20;  // 10px margin on each side
+        int entryPanelWidth = panelWidth - scaledPadding * 2 - scaleInt(20);  // 10px margin on each side
         int entryPanelLeft = panelLeft + (panelWidth - entryPanelWidth) / 2;
 
         int y = contentTop - scrollOffset;
@@ -151,31 +157,29 @@ public class DialogueHistoryScreen extends Screen {
                 graphics.fill(entryPanelLeft, y, entryPanelLeft + entryPanelWidth, y + rendered.height, 0x88000000);
 
                 // Icon on the left (inside entry panel with padding)
-                int contentX = entryPanelLeft + ENTRY_PADDING;
+                int contentX = entryPanelLeft + scaledEntryPadding;
                 if (rendered.icon != null) {
-                    RenderSystem.enableBlend();
-                    int iconY = y + (rendered.height - ICON_SIZE) / 2;
-                    graphics.blit(rendered.icon, contentX, iconY, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
-                    RenderSystem.disableBlend();
+                    int iconY = y + (rendered.height - scaledIconSize) / 2;
+                    graphics.blit(rendered.icon, contentX, iconY, 0, 0, scaledIconSize, scaledIconSize, scaledIconSize, scaledIconSize);
                 }
-                contentX += ICON_SIZE + PADDING_H;
+                contentX += scaledIconSize + scaledPaddingH;
 
                 // Render wrapped lines left-aligned, vertically centered
-                int textBlockHeight = rendered.lines.size() * LINE_HEIGHT;
+                int textBlockHeight = rendered.lines.size() * font.lineHeight;
                 int lineY = y + (rendered.height - textBlockHeight) / 2;
                 for (FormattedCharSequence line : rendered.lines) {
                     graphics.drawString(font, line, contentX, lineY, 0xFFFFFF);
-                    lineY += LINE_HEIGHT;
+                    lineY += font.lineHeight;
                 }
             }
-            y += rendered.height + ENTRY_SPACING;
+            y += rendered.height + scaledEntrySpacing;
         }
 
         graphics.disableScissor();
 
         // Scrollbar
         if (totalContentHeight > contentHeight) {
-            int scrollbarX = panelLeft + panelWidth - PADDING;
+            int scrollbarX = panelLeft + panelWidth - scaledPadding;
             int scrollbarHeight = Math.max(20, contentHeight * contentHeight / totalContentHeight);
             int maxScroll = totalContentHeight - contentHeight;
             int scrollbarY = contentTop + (int) ((contentHeight - scrollbarHeight) * ((float) scrollOffset / maxScroll));
@@ -192,7 +196,7 @@ public class DialogueHistoryScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        int contentHeight = panelHeight - 30 - PADDING;
+        int contentHeight = panelHeight - scaleInt(30) - scaledPadding;
         int maxScroll = Math.max(0, totalContentHeight - contentHeight);
         scrollOffset = (int) Math.max(0, Math.min(maxScroll, scrollOffset - scrollY * 20));
         return true;
@@ -212,4 +216,16 @@ public class DialogueHistoryScreen extends Screen {
     public boolean isPauseScreen() {
         return false;
     }
+
+    private float calculateUiScale() {
+        float scaleW = width / (float) BASE_WIDTH;
+        float scaleH = height / (float) BASE_HEIGHT;
+        return Math.max(1.0f, Math.min(scaleW, scaleH));
+    }
+
+    private int scaleInt(int value) {
+        return Math.max(1, Math.round(value * uiScale));
+    }
 }
+
+

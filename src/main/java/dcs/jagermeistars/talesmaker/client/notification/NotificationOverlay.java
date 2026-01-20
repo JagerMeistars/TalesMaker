@@ -22,6 +22,8 @@ public class NotificationOverlay {
     private static final int ICON_WIDTH = 14;
     private static final int SLIDE_DISTANCE = 40; // Pixels to slide when appearing/fading
     private static final int APPEAR_SLIDE = 20; // Pixels to slide in from right
+    private static final int BASE_WIDTH = 960;
+    private static final int BASE_HEIGHT = 540;
 
     // Unicode icons
     private static final String ICON_SUCCESS = "\u2714"; // checkmark
@@ -44,7 +46,16 @@ public class NotificationOverlay {
         Font font = mc.font;
 
         int screenWidth = mc.getWindow().getGuiScaledWidth();
-        int baseY = PADDING;
+        int screenHeight = mc.getWindow().getGuiScaledHeight();
+        float uiScale = calculateUiScale(screenWidth, screenHeight);
+        int padding = scaleInt(PADDING, uiScale);
+        int margin = scaleInt(MARGIN, uiScale);
+        int iconWidth = scaleInt(ICON_WIDTH, uiScale);
+        int notificationWidth = Math.max(scaleInt(180, uiScale), scaleInt(NOTIFICATION_WIDTH, uiScale));
+        int lineHeight = Math.max(font.lineHeight, scaleInt(LINE_HEIGHT, uiScale));
+        int slideDistance = scaleInt(SLIDE_DISTANCE, uiScale);
+        int appearSlide = scaleInt(APPEAR_SLIDE, uiScale);
+        int baseY = padding;
 
         for (NotificationManager.Notification notification : notifications) {
             float appearProgress = notification.getAppearProgress();
@@ -56,9 +67,9 @@ public class NotificationOverlay {
             float easedFade = fadeProgress * fadeProgress;
 
             // Calculate X offset for slide-in animation (from right)
-            int slideInOffset = (int) ((1f - easedAppear) * APPEAR_SLIDE);
+            int slideInOffset = (int) ((1f - easedAppear) * appearSlide);
             // Calculate Y offset for slide-up animation when fading
-            int slideUpOffset = (int) (easedFade * SLIDE_DISTANCE);
+            int slideUpOffset = (int) (easedFade * slideDistance);
 
             int y = baseY - slideUpOffset;
 
@@ -87,29 +98,29 @@ public class NotificationOverlay {
             }
 
             // Calculate height based on message
-            String[] lines = splitMessage(displayMessage, font, NOTIFICATION_WIDTH - PADDING * 2 - ICON_WIDTH);
-            int contentHeight = (lines.length * LINE_HEIGHT) + MARGIN * 2;
+            String[] lines = splitMessage(displayMessage, font, notificationWidth - padding * 2 - iconWidth);
+            int contentHeight = (lines.length * lineHeight) + margin * 2;
 
-            int x = screenWidth - NOTIFICATION_WIDTH - PADDING + slideInOffset;
+            int x = screenWidth - notificationWidth - padding + slideInOffset;
 
             // Draw background
-            graphics.fill(x, y, x + NOTIFICATION_WIDTH, y + contentHeight, bgColor);
+            graphics.fill(x, y, x + notificationWidth, y + contentHeight, bgColor);
 
             // Calculate vertical centering
-            int textHeight = lines.length * LINE_HEIGHT;
+            int textHeight = lines.length * lineHeight;
             int startY = y + (contentHeight - textHeight) / 2;
 
             // Draw icon centered vertically
-            graphics.drawString(font, icon, x + PADDING, startY, textColor, false);
+            graphics.drawString(font, icon, x + padding, startY, textColor, false);
 
             // Draw message lines centered vertically (left-aligned horizontally)
             int lineY = startY;
             for (String line : lines) {
-                graphics.drawString(font, line, x + PADDING + ICON_WIDTH, lineY, textColor, false);
-                lineY += LINE_HEIGHT;
+                graphics.drawString(font, line, x + padding + iconWidth, lineY, textColor, false);
+                lineY += lineHeight;
             }
 
-            baseY += contentHeight + MARGIN;
+            baseY += contentHeight + margin;
         }
     }
 
@@ -140,5 +151,15 @@ public class NotificationOverlay {
         }
 
         return lines.toArray(new String[0]);
+    }
+
+    private static float calculateUiScale(int width, int height) {
+        float scaleW = width / (float) BASE_WIDTH;
+        float scaleH = height / (float) BASE_HEIGHT;
+        return Math.max(1.0f, Math.min(scaleW, scaleH));
+    }
+
+    private static int scaleInt(int value, float scale) {
+        return Math.max(1, Math.round(value * scale));
     }
 }

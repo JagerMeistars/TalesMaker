@@ -10,6 +10,7 @@
   "screen.talesmaker.history_title": "History",
   "screen.talesmaker.no_history": "Empty",
   "gui.talesmaker.interact.default": "Interact - [%s] ",
+  "gui.talesmaker.choice_selected": "You chose \"%s\"",
   "commands.talesmaker.rotate.success": "NPC '%s' is now rotating to %s (mode: %s)",
   "commands.talesmaker.rotate.success_entity": "NPC '%s' is now rotating to %s (mode: %s)",
   "commands.talesmaker.rotate.invalid_duration": "Invalid mode. Use 'once' or 'continuous'",

@@ -13,6 +13,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
 
@@ -25,7 +26,7 @@ import java.util.Set;
  * UI style inspired by Tomb Raider.
  *
  * Layout:
- * - Left side: 3D model with rotation/zoom
+ * - Left side: 3D model with rotation
  * - Right side: Info panel with name, belonging, description, and clue list
  */
 public class ClueScreen extends Screen {
@@ -38,19 +39,15 @@ public class ClueScreen extends Screen {
     private static final int COLOR_DIVIDER = 0xFF555555;
     private static final int COLOR_GREEN = 0xFF44AA44;
 
-    // Panel dimensions
+    // Panel dimensions (base values)
     private static final int PANEL_WIDTH = 280;
     private static final int PANEL_PADDING = 15;
+    private static final int BASE_MARGIN = 20;
 
     // Model rendering
     private static final float MODEL_SCALE = 50.0f;
     private static final float ROTATION_SPEED = 0.5f;
-    private static final float ZOOM_SPEED = 0.1f;
-
-    // Cursor texture
-    private static final ResourceLocation CURSOR_MAGNIFIER =
-            ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/gui/clue/cursor_magnifier.png");
-    private static final int CURSOR_SIZE = 32;
+    private static final float INERTIA_DAMPING = 0.9f;
 
     // Data
     private final ResourceLocation presetId;
@@ -60,21 +57,26 @@ public class ClueScreen extends Screen {
     private final ResourceLocation modelPath;
     private final ResourceLocation texturePath;
     private final ResourceLocation soundPath;
+    private final Float modelScaleOverride;
     private final List<OpenCluePacket.ClientClueData> clues;
     private final String onComplete; // Can be null
 
     // State
     private final Set<String> discoveredBones = new HashSet<>();
-    private ClueRenderEntity renderEntity;
     private ClueModelRenderer modelRenderer;
-    private List<ClueModelParser.BoneData> hotspots;
+    private ClueModelParser.ModelData modelData;
+    private List<ClueModelParser.CubeData> hotspotCubes;
 
     // Camera state
     private float rotationX = 15;
     private float rotationY = 0;
-    private float zoom = 1.0f;
     private boolean isDragging = false;
     private double lastMouseX, lastMouseY;
+    private float rotationVelocityX = 0.0f;
+    private float rotationVelocityY = 0.0f;
+    private long lastFrameTime = System.currentTimeMillis();
+    private long pointerCursor = 0L;
+    private boolean cursorActive = false;
 
     // Hover state
     private String hoveredBone = null;
@@ -90,10 +92,16 @@ public class ClueScreen extends Screen {
     private int panelX;
     private int panelY;
     private int panelHeight;
+    private int panelWidth;
+    private int panelPadding;
+    private int uiMargin;
+    private float uiScale = 1.0f;
+    private float modelScale = MODEL_SCALE;
 
     public ClueScreen(ResourceLocation presetId, Component itemName, Component belonging,
                       Component description, ResourceLocation modelPath, ResourceLocation texturePath,
-                      ResourceLocation soundPath, List<OpenCluePacket.ClientClueData> clues,
+                      ResourceLocation soundPath, Float modelScaleOverride,
+                      List<OpenCluePacket.ClientClueData> clues,
                       String onComplete) {
         super(itemName);
         this.presetId = presetId;
@@ -103,6 +111,7 @@ public class ClueScreen extends Screen {
         this.modelPath = modelPath;
         this.texturePath = texturePath;
         this.soundPath = soundPath;
+        this.modelScaleOverride = modelScaleOverride;
         this.clues = clues;
         this.onComplete = onComplete;
         this.minecraft = Minecraft.getInstance();
@@ -112,33 +121,53 @@ public class ClueScreen extends Screen {
     protected void init() {
         super.init();
 
-        // Create render entity and renderer
-        renderEntity = new ClueRenderEntity(modelPath, texturePath);
+        // Create renderer and model data
         modelRenderer = new ClueModelRenderer();
+        modelData = ClueModelParser.getModelData(modelPath);
 
         // Parse model for hotspots
         List<String> boneNames = clues.stream()
                 .map(OpenCluePacket.ClientClueData::bone)
                 .toList();
-        hotspots = ClueModelParser.getBonesData(modelPath, boneNames);
+        hotspotCubes = ClueModelParser.getCubes(modelPath, boneNames);
+
+        Set<String> hotspotNames = new HashSet<>();
+        for (ClueModelParser.CubeData cube : hotspotCubes) {
+            hotspotNames.add(cube.name());
+        }
+        for (OpenCluePacket.ClientClueData clue : clues) {
+            if (!hotspotNames.contains(clue.bone())) {
+                discoverClue(clue.bone(), false);
+            }
+        }
 
         // Calculate layout
-        panelX = width - PANEL_WIDTH - 20;
-        panelY = 20;
-        panelHeight = height - 40;
+        uiScale = calculateUiScale();
+        uiMargin = scaleInt(BASE_MARGIN);
+        int maxPanelWidth = Math.max(1, width - uiMargin * 2);
+        int minPanelWidth = Math.min(scaleInt(180), maxPanelWidth);
+        panelWidth = Math.max(minPanelWidth, Math.min(scaleInt(PANEL_WIDTH), maxPanelWidth));
+        panelPadding = scaleInt(PANEL_PADDING);
+        panelX = width - panelWidth - uiMargin;
+        panelY = uiMargin;
+        panelHeight = Math.max(scaleInt(120), height - uiMargin * 2);
 
         // Model center is in the left area
-        modelCenterX = (panelX - 20) / 2;
+        modelCenterX = (panelX - uiMargin) / 2;
         modelCenterY = height / 2;
 
+        modelScale = modelScaleOverride == null ? calculateModelScale() : modelScaleOverride;
+
         // Set screen params for ray-picking
-        modelRenderer.setScreenParams(width, height, modelCenterX, modelCenterY, MODEL_SCALE);
+        modelRenderer.setScreenParams(width, height, modelCenterX, modelCenterY, modelScale);
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         // Dark background
         graphics.fill(0, 0, width, height, 0xCC000000);
+
+        updateInertia();
 
         // Update hover state
         updateHoverState(mouseX, mouseY);
@@ -149,10 +178,7 @@ public class ClueScreen extends Screen {
         // Render info panel
         renderInfoPanel(graphics);
 
-        // Render custom cursor if hovering over hotspot
-        if (hoveredBone != null && !discoveredBones.contains(hoveredBone)) {
-            renderMagnifierCursor(graphics, mouseX, mouseY);
-        }
+        updateCursor();
 
         // Render hint at bottom
         renderHint(graphics);
@@ -160,14 +186,14 @@ public class ClueScreen extends Screen {
 
     private void updateHoverState(int mouseX, int mouseY) {
         modelRenderer.setRotation(rotationX, rotationY);
-        modelRenderer.setZoom(zoom);
 
         // Only pick undiscovered hotspots
-        List<ClueModelParser.BoneData> undiscoveredHotspots = hotspots.stream()
+        List<ClueModelParser.CubeData> undiscoveredHotspots = hotspotCubes.stream()
                 .filter(h -> !discoveredBones.contains(h.name()))
                 .toList();
 
-        hoveredBone = modelRenderer.pickHotspot(mouseX, mouseY, undiscoveredHotspots).orElse(null);
+        List<ClueModelParser.CubeData> allCubes = modelData == null ? List.of() : modelData.cubes();
+        hoveredBone = modelRenderer.pickHotspot(mouseX, mouseY, allCubes, undiscoveredHotspots).orElse(null);
     }
 
     private void renderModel(GuiGraphics graphics, float partialTick) {
@@ -183,23 +209,67 @@ public class ClueScreen extends Screen {
         // Get buffer source
         MultiBufferSource.BufferSource bufferSource = minecraft.renderBuffers().bufferSource();
 
+        RenderSystem.enableDepthTest();
+
         // Render the model
         modelRenderer.setRotation(rotationX, rotationY);
-        modelRenderer.setZoom(zoom);
-        modelRenderer.render(renderEntity, poseStack, bufferSource, 15728880);
+        modelRenderer.render(modelData, texturePath, poseStack, bufferSource, 15728880);
 
         bufferSource.endBatch();
 
         poseStack.popPose();
+
+        RenderSystem.disableDepthTest();
+    }
+
+    private float calculateModelScale() {
+        if (modelData == null || modelData.cubes().isEmpty()) {
+            return MODEL_SCALE / 16.0f;
+        }
+
+        double minX = Double.POSITIVE_INFINITY;
+        double minY = Double.POSITIVE_INFINITY;
+        double minZ = Double.POSITIVE_INFINITY;
+        double maxX = Double.NEGATIVE_INFINITY;
+        double maxY = Double.NEGATIVE_INFINITY;
+        double maxZ = Double.NEGATIVE_INFINITY;
+
+        for (ClueModelParser.CubeData cube : modelData.cubes()) {
+            Vec3 from = cube.from();
+            Vec3 to = cube.to();
+
+            minX = Math.min(minX, Math.min(from.x, to.x));
+            minY = Math.min(minY, Math.min(from.y, to.y));
+            minZ = Math.min(minZ, Math.min(from.z, to.z));
+            maxX = Math.max(maxX, Math.max(from.x, to.x));
+            maxY = Math.max(maxY, Math.max(from.y, to.y));
+            maxZ = Math.max(maxZ, Math.max(from.z, to.z));
+        }
+
+        double sizeX = maxX - minX;
+        double sizeY = maxY - minY;
+        double sizeZ = maxZ - minZ;
+        double maxDim = Math.max(sizeX, Math.max(sizeY, sizeZ));
+
+        if (maxDim <= 0.001) {
+            return MODEL_SCALE / 16.0f;
+        }
+
+        float maxRadius = Math.min(modelCenterX - scaleInt(30), modelCenterY - scaleInt(30));
+        if (maxRadius <= 0) {
+            return MODEL_SCALE / 16.0f;
+        }
+
+        return (float) (maxRadius / maxDim);
     }
 
     private void renderInfoPanel(GuiGraphics graphics) {
         // Panel background
-        graphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + panelHeight, COLOR_PANEL_BG);
+        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, COLOR_PANEL_BG);
 
-        int y = panelY + PANEL_PADDING;
-        int textX = panelX + PANEL_PADDING;
-        int textWidth = PANEL_WIDTH - PANEL_PADDING * 2;
+        int y = panelY + panelPadding;
+        int textX = panelX + panelPadding;
+        int textWidth = panelWidth - panelPadding * 2;
 
         // Item name (large)
         graphics.drawString(font, itemName, textX, y, COLOR_WHITE);
@@ -214,7 +284,7 @@ public class ClueScreen extends Screen {
         }
 
         // Divider
-        graphics.fill(textX, y, panelX + PANEL_WIDTH - PANEL_PADDING, y + 1, COLOR_DIVIDER);
+        graphics.fill(textX, y, panelX + panelWidth - panelPadding, y + 1, COLOR_DIVIDER);
         y += 10;
 
         // Description (wrapped)
@@ -226,7 +296,7 @@ public class ClueScreen extends Screen {
         y += 15;
 
         // Double divider
-        graphics.fill(textX, y, panelX + PANEL_WIDTH - PANEL_PADDING, y + 2, COLOR_DIVIDER);
+        graphics.fill(textX, y, panelX + panelWidth - panelPadding, y + 2, COLOR_DIVIDER);
         y += 15;
 
         // Clue list
@@ -261,19 +331,26 @@ public class ClueScreen extends Screen {
         int found = discoveredBones.size();
         int total = clues.size();
         String counter = "Найдено: " + found + "/" + total;
-        int counterY = panelY + panelHeight - PANEL_PADDING - font.lineHeight;
+        int counterY = panelY + panelHeight - panelPadding - font.lineHeight;
 
-        graphics.fill(textX, counterY - 5, panelX + PANEL_WIDTH - PANEL_PADDING, counterY - 4, COLOR_DIVIDER);
+        graphics.fill(textX, counterY - 5, panelX + panelWidth - panelPadding, counterY - 4, COLOR_DIVIDER);
         graphics.drawString(font, counter, textX, counterY, found == total ? COLOR_GREEN : COLOR_WHITE);
     }
 
-    private void renderMagnifierCursor(GuiGraphics graphics, int mouseX, int mouseY) {
-        // Hide default cursor when showing magnifier
-        // Draw magnifier cursor centered on mouse
-        RenderSystem.enableBlend();
-        graphics.blit(CURSOR_MAGNIFIER, mouseX - CURSOR_SIZE / 2, mouseY - CURSOR_SIZE / 2,
-                CURSOR_SIZE, CURSOR_SIZE, 0, 0, 32, 32, 32, 32);
-        RenderSystem.disableBlend();
+    private void updateCursor() {
+        long window = minecraft.getWindow().getWindow();
+        boolean shouldShowPointer = hoveredBone != null && !discoveredBones.contains(hoveredBone);
+
+        if (shouldShowPointer && !cursorActive) {
+            if (pointerCursor == 0L) {
+                pointerCursor = GLFW.glfwCreateStandardCursor(GLFW.GLFW_POINTING_HAND_CURSOR);
+            }
+            GLFW.glfwSetCursor(window, pointerCursor);
+            cursorActive = true;
+        } else if (!shouldShowPointer && cursorActive) {
+            GLFW.glfwSetCursor(window, 0L);
+            cursorActive = false;
+        }
     }
 
     private void renderHint(GuiGraphics graphics) {
@@ -285,21 +362,26 @@ public class ClueScreen extends Screen {
         }
 
         int hintWidth = font.width(hint);
-        int hintX = (width - PANEL_WIDTH - 20) / 2 - hintWidth / 2;
-        int hintY = height - 30;
+        int leftAreaWidth = panelX - uiMargin;
+        int hintX = leftAreaWidth / 2 - hintWidth / 2;
+        int hintY = height - scaleInt(30);
 
         graphics.drawString(font, hint, hintX, hintY, COLOR_GRAY);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) {
-            // Left click - check for hotspot or start drag
+        if (button == 1) {
+            // Right click - check for hotspot
             if (hoveredBone != null && !discoveredBones.contains(hoveredBone)) {
-                discoverClue(hoveredBone);
+                discoverClue(hoveredBone, true);
                 return true;
             }
+            return true;
+        }
 
+        if (button == 0) {
+            // Left click - start rotation drag
             // Start rotation drag
             isDragging = true;
             lastMouseX = mouseX;
@@ -313,6 +395,7 @@ public class ClueScreen extends Screen {
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (button == 0) {
             isDragging = false;
+            lastFrameTime = System.currentTimeMillis();
         }
         return super.mouseReleased(mouseX, mouseY, button);
     }
@@ -320,8 +403,13 @@ public class ClueScreen extends Screen {
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (isDragging && button == 0) {
-            rotationY += (float) (mouseX - lastMouseX) * ROTATION_SPEED;
-            rotationX += (float) (mouseY - lastMouseY) * ROTATION_SPEED;
+            float deltaX = (float) (mouseX - lastMouseX);
+            float deltaY = (float) (mouseY - lastMouseY);
+            rotationY += deltaX * ROTATION_SPEED;
+            rotationX += deltaY * ROTATION_SPEED;
+
+            rotationVelocityY = deltaX * ROTATION_SPEED;
+            rotationVelocityX = deltaY * ROTATION_SPEED;
 
             // Clamp X rotation
             rotationX = Math.max(-80, Math.min(80, rotationX));
@@ -335,10 +423,32 @@ public class ClueScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        zoom += (float) scrollY * ZOOM_SPEED;
-        zoom = Math.max(0.5f, Math.min(3.0f, zoom));
-        modelRenderer.setZoom(zoom);
-        return true;
+        return false;
+    }
+
+    private void updateInertia() {
+        long now = System.currentTimeMillis();
+        float dt = (now - lastFrameTime) / 1000.0f;
+        lastFrameTime = now;
+
+        if (isDragging || dt <= 0) {
+            return;
+        }
+
+        rotationY += rotationVelocityY * dt * 60.0f;
+        rotationX += rotationVelocityX * dt * 60.0f;
+        rotationX = Math.max(-80, Math.min(80, rotationX));
+
+        float decay = (float) Math.pow(INERTIA_DAMPING, dt * 60.0f);
+        rotationVelocityX *= decay;
+        rotationVelocityY *= decay;
+
+        if (Math.abs(rotationVelocityX) < 0.01f) {
+            rotationVelocityX = 0.0f;
+        }
+        if (Math.abs(rotationVelocityY) < 0.01f) {
+            rotationVelocityY = 0.0f;
+        }
     }
 
     @Override
@@ -361,20 +471,76 @@ public class ClueScreen extends Screen {
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
-    private void discoverClue(String boneId) {
+    private void discoverClue(String boneId, boolean triggerCommand) {
         if (discoveredBones.contains(boneId)) {
             return;
         }
 
         discoveredBones.add(boneId);
-        lastDiscoveredBone = boneId;
-        discoveryAnimTime = System.currentTimeMillis();
-
-        // Play discovery sound
-        playDiscoverySound();
+        if (triggerCommand) {
+            lastDiscoveredBone = boneId;
+            discoveryAnimTime = System.currentTimeMillis();
+            playDiscoverySound();
+        }
 
         // Send packet to server
-        PacketDistributor.sendToServer(new DiscoverCluePacket(presetId, boneId));
+        PacketDistributor.sendToServer(new DiscoverCluePacket(presetId, boneId, triggerCommand));
+    }
+
+    private void renderDebugHotspots(GuiGraphics graphics) {
+        if (hotspotCubes == null || hotspotCubes.isEmpty()) {
+            return;
+        }
+
+        for (ClueModelParser.CubeData cube : hotspotCubes) {
+            List<float[]> hull = modelRenderer.getCubeScreenHull(cube);
+            if (hull.isEmpty()) {
+                continue;
+            }
+
+            int color = 0x66FFFFFF;
+            if (discoveredBones.contains(cube.name())) {
+                color = 0x6600FF00;
+            } else if (cube.name().equals(hoveredBone)) {
+                color = 0x66FF00FF;
+            }
+
+            for (int i = 0; i < hull.size(); i++) {
+                float[] a = hull.get(i);
+                float[] b = hull.get((i + 1) % hull.size());
+                int x0 = Math.round(a[0]);
+                int y0 = Math.round(a[1]);
+                int x1 = Math.round(b[0]);
+                int y1 = Math.round(b[1]);
+                drawLine(graphics, x0, y0, x1, y1, color);
+            }
+        }
+    }
+
+    private void drawLine(GuiGraphics graphics, int x0, int y0, int x1, int y1, int color) {
+        int dx = Math.abs(x1 - x0);
+        int dy = Math.abs(y1 - y0);
+        int sx = x0 < x1 ? 1 : -1;
+        int sy = y0 < y1 ? 1 : -1;
+        int err = dx - dy;
+
+        int x = x0;
+        int y = y0;
+        while (true) {
+            graphics.fill(x, y, x + 1, y + 1, color);
+            if (x == x1 && y == y1) {
+                break;
+            }
+            int e2 = 2 * err;
+            if (e2 > -dy) {
+                err -= dy;
+                x += sx;
+            }
+            if (e2 < dx) {
+                err += dx;
+                y += sy;
+            }
+        }
     }
 
     private void playDiscoverySound() {
@@ -386,6 +552,14 @@ public class ClueScreen extends Screen {
 
     @Override
     public void onClose() {
+        if (cursorActive) {
+            GLFW.glfwSetCursor(minecraft.getWindow().getWindow(), 0L);
+            cursorActive = false;
+        }
+        if (pointerCursor != 0L) {
+            GLFW.glfwDestroyCursor(pointerCursor);
+            pointerCursor = 0L;
+        }
         super.onClose();
     }
 
@@ -397,5 +571,17 @@ public class ClueScreen extends Screen {
     @Override
     public boolean shouldCloseOnEsc() {
         return false; // We handle ESC manually
+    }
+
+    private int scaleInt(int value) {
+        return Math.max(1, Math.round(value * uiScale));
+    }
+
+    private float calculateUiScale() {
+        float baseWidth = 960.0f;
+        float baseHeight = 540.0f;
+        float scaleW = width / baseWidth;
+        float scaleH = height / baseHeight;
+        return Math.max(1.0f, Math.min(scaleW, scaleH));
     }
 }

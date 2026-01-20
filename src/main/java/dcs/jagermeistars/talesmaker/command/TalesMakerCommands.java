@@ -16,6 +16,7 @@ import dcs.jagermeistars.talesmaker.server.ClueSessionManager;
 import dcs.jagermeistars.talesmaker.entity.NpcEntity;
 import dcs.jagermeistars.talesmaker.init.ModEntities;
 import dcs.jagermeistars.talesmaker.monologue.MonologueManager;
+import dcs.jagermeistars.talesmaker.network.BindActionPacket;
 import dcs.jagermeistars.talesmaker.network.ClearHistoryPacket;
 import dcs.jagermeistars.talesmaker.network.DialoguePacket;
 import dcs.jagermeistars.talesmaker.network.DialogueTimesPacket;
@@ -31,6 +32,7 @@ import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -261,6 +263,14 @@ public class TalesMakerCommands {
                                 // /talesmaker history clear
                                 .then(Commands.literal("clear")
                                         .executes(TalesMakerCommands::historyClear)))
+                        .then(Commands.literal("bind")
+                                .then(Commands.literal("add")
+                                        .then(Commands.argument("key", StringArgumentType.word())
+                                                .then(Commands.argument("command", StringArgumentType.greedyString())
+                                                        .executes(TalesMakerCommands::bindAdd))))
+                                .then(Commands.literal("remove")
+                                        .then(Commands.argument("key", StringArgumentType.word())
+                                                .executes(TalesMakerCommands::bindRemove))))
                         // /talesmaker choice <players> <speaker> <window_id>
                         .then(Commands.literal("choice")
                                 .then(Commands.argument("players", EntityArgument.players())
@@ -626,6 +636,31 @@ public class TalesMakerCommands {
         return 1;
     }
 
+    private static int bindAdd(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        String key = StringArgumentType.getString(context, "key");
+        String command = StringArgumentType.getString(context, "command");
+        var players = getBindTargets(context);
+        for (ServerPlayer player : players) {
+            PacketDistributor.sendToPlayer(player, new BindActionPacket("add", key, command));
+        }
+        return players.size();
+    }
+
+    private static int bindRemove(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        String key = StringArgumentType.getString(context, "key");
+        var players = getBindTargets(context);
+        for (ServerPlayer player : players) {
+            PacketDistributor.sendToPlayer(player, new BindActionPacket("remove", key, ""));
+        }
+        return players.size();
+    }
+
+    private static java.util.List<ServerPlayer> getBindTargets(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        return source.getServer().getPlayerList().getPlayers();
+    }
     private static int historyClear(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
 
@@ -1292,6 +1327,7 @@ public class TalesMakerCommands {
                     preset.model(),
                     preset.texture(),
                     preset.getDiscoverySound(),
+                    preset.modelScale().orElse(null),
                     clientClues,
                     preset.onComplete().orElse(null)
             );
@@ -1367,3 +1403,8 @@ public class TalesMakerCommands {
         ).create(java.util.Optional.empty());
     }
 }
+
+
+
+
+

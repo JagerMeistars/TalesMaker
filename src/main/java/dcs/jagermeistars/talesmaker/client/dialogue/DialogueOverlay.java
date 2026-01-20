@@ -6,11 +6,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
+
+import java.util.List;
 
 @EventBusSubscriber(modid = TalesMaker.MODID, value = Dist.CLIENT)
 public class DialogueOverlay {
@@ -19,6 +22,8 @@ public class DialogueOverlay {
     private static final int ICON_SIZE = 16;
     private static final int PADDING_H = 6;
     private static final int PADDING_V = 4;
+    private static final int BASE_WIDTH = 960;
+    private static final int BASE_HEIGHT = 540;
 
     @SubscribeEvent
     public static void onRenderGui(RenderGuiLayerEvent.Post event) {
@@ -37,6 +42,10 @@ public class DialogueOverlay {
 
         int screenWidth = mc.getWindow().getGuiScaledWidth();
         int screenHeight = mc.getWindow().getGuiScaledHeight();
+        float uiScale = calculateUiScale(screenWidth, screenHeight);
+        int iconSize = scaleInt(ICON_SIZE, uiScale);
+        int paddingH = scaleInt(PADDING_H, uiScale);
+        int paddingV = scaleInt(PADDING_V, uiScale);
 
         // Calculate animation progress
         long elapsed = System.currentTimeMillis() - DialogueManager.getDialogueStartTime();
@@ -57,7 +66,7 @@ public class DialogueOverlay {
 
         int alphaInt = (int) (alpha * 255);
 
-        // Build the text: [Name]: message (single line, brackets inherit name style, colon is white)
+        // Build the text: [Name]: message (multi-line with automatic wrap)
         Component npcName = dialogue.npcName();
         Component nameWithBrackets = Component.empty()
                 .append(Component.literal("[").withStyle(npcName.getStyle()))
@@ -65,36 +74,134 @@ public class DialogueOverlay {
                 .append(Component.literal("]").withStyle(npcName.getStyle()))
                 .append(Component.literal(": "));
         Component fullText = nameWithBrackets.copy().append(dialogue.message());
+        String fullTextPlain = fullText.getString();
 
-        int textWidth = font.width(fullText);
-        int iconSpace = dialogue.icon() != null ? ICON_SIZE + PADDING_H : 0;
-        int boxWidth = iconSpace + textWidth + PADDING_H * 2;
-        int boxHeight = Math.max(ICON_SIZE, font.lineHeight) + PADDING_V * 2;
+        int iconSpace = dialogue.icon() != null ? iconSize + paddingH : 0;
+        int targetTextWidth = scaleInt(200, uiScale);
+        int maxTextWidth = Math.max(1, Math.min(screenWidth - iconSpace - paddingH * 2 - scaleInt(8, uiScale),
+                targetTextWidth));
+        List<String> lines = wrapWithHyphen(font, fullTextPlain, maxTextWidth);
+
+        int maxLineWidth = 0;
+        for (String line : lines) {
+            maxLineWidth = Math.max(maxLineWidth, font.width(line));
+        }
+
+        int boxWidth = iconSpace + maxLineWidth + paddingH * 2;
+        int lineHeight = font.lineHeight + scaleInt(1, uiScale);
+        int boxHeight = Math.max(iconSize, lines.size() * lineHeight) + paddingV * 2;
 
         // Position: just above hotbar, centered
         int x = (screenWidth - boxWidth) / 2;
-        int y = screenHeight - 48 - boxHeight;
+        int y = screenHeight - scaleInt(48, uiScale) - boxHeight;
 
         // Draw semi-transparent background
         int bgColor = (alphaInt * 140 / 255 << 24) | 0x000000;
         graphics.fill(x, y, x + boxWidth, y + boxHeight, bgColor);
 
         // Draw icon if available
-        int textStartX = x + PADDING_H;
+        int textStartX = x + paddingH;
         if (dialogue.icon() != null) {
             RenderSystem.enableBlend();
             RenderSystem.defaultBlendFunc();
             RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, alpha);
-            int iconY = y + (boxHeight - ICON_SIZE) / 2;
-            graphics.blit(dialogue.icon(), x + PADDING_H, iconY, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
+            int iconY = y + (boxHeight - iconSize) / 2;
+            graphics.blit(dialogue.icon(), x + paddingH, iconY, 0, 0, iconSize, iconSize, iconSize, iconSize);
             RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
             RenderSystem.disableBlend();
-            textStartX = x + PADDING_H + ICON_SIZE + PADDING_H;
+            textStartX = x + paddingH + iconSize + paddingH;
         }
 
-        // Draw text on single line
-        int textY = y + (boxHeight - font.lineHeight) / 2;
+        // Draw wrapped text lines
         int textColor = 0xFFFFFF | (alphaInt << 24);
-        graphics.drawString(font, fullText, textStartX, textY, textColor, false);
+        int textBlockHeight = lines.size() * lineHeight;
+        int textY = y + (boxHeight - textBlockHeight) / 2;
+        for (String line : lines) {
+            graphics.drawString(font, line, textStartX, textY, textColor, false);
+            textY += lineHeight;
+        }
+    }
+
+    private static float calculateUiScale(int width, int height) {
+        float scaleW = width / (float) BASE_WIDTH;
+        float scaleH = height / (float) BASE_HEIGHT;
+        return Math.max(1.0f, Math.min(scaleW, scaleH));
+    }
+
+    private static int scaleInt(int value, float scale) {
+        return Math.max(1, Math.round(value * scale));
+    }
+
+    private static List<String> wrapWithHyphen(Font font, String text, int maxWidth) {
+        if (text == null || text.isEmpty()) {
+            return List.of("");
+        }
+        if (font.width(text) <= maxWidth) {
+            return List.of(text);
+        }
+
+        int hyphenWidth = font.width("-");
+        List<String> lines = new java.util.ArrayList<>();
+        StringBuilder current = new StringBuilder();
+
+        for (String word : text.split(" ")) {
+            if (current.length() == 0) {
+                if (font.width(word) <= maxWidth) {
+                    current.append(word);
+                } else {
+                    splitLongWord(font, word, maxWidth, hyphenWidth, lines, current);
+                }
+                continue;
+            }
+
+            String withSpace = current + " " + word;
+            if (font.width(withSpace) <= maxWidth) {
+                current.append(" ").append(word);
+            } else {
+                lines.add(current.toString());
+                current.setLength(0);
+                if (font.width(word) <= maxWidth) {
+                    current.append(word);
+                } else {
+                    splitLongWord(font, word, maxWidth, hyphenWidth, lines, current);
+                }
+            }
+        }
+
+        if (current.length() > 0) {
+            lines.add(current.toString());
+        }
+
+        return lines;
+    }
+
+    private static void splitLongWord(Font font, String word, int maxWidth, int hyphenWidth,
+                                      List<String> lines, StringBuilder current) {
+        int index = 0;
+        while (index < word.length()) {
+            StringBuilder part = new StringBuilder();
+            int width = 0;
+            int limit = Math.max(1, maxWidth - hyphenWidth);
+
+            while (index < word.length()) {
+                char ch = word.charAt(index);
+                int chWidth = font.width(String.valueOf(ch));
+                if (part.length() > 0 && width + chWidth > limit) {
+                    break;
+                }
+                part.append(ch);
+                width += chWidth;
+                index++;
+                if (width >= limit) {
+                    break;
+                }
+            }
+
+            if (index < word.length()) {
+                lines.add(part + "-");
+            } else {
+                current.append(part);
+            }
+        }
     }
 }

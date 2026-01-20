@@ -27,6 +27,8 @@ public class InteractHintOverlay {
     private static final int MARGIN_BOTTOM = 10;
     private static final int MARGIN_RIGHT = 10;
     private static final int FADE_TICKS = 10;
+    private static final int BASE_WIDTH = 960;
+    private static final int BASE_HEIGHT = 540;
 
     private static NpcEntity lastTargetNpc = null;
     private static int fadeInTicks = 0;
@@ -100,16 +102,20 @@ public class InteractHintOverlay {
         // Get the interact key name
         String keyName = TalesMakerClient.INTERACT_KEY.getTranslatedKeyMessage().getString().toUpperCase();
 
-        // Get hint text based on NPC custom ID with key substitution
-        String npcId = lastTargetNpc.getCustomId();
-        String translationKey = "gui.talesmaker.interact." + npcId;
-        Component hintText = Component.translatable(translationKey, keyName);
-
-        // Check if translation exists, fallback to default
-        String translatedText = hintText.getString();
-        if (translatedText.equals(translationKey)) {
-            // No custom translation, use default with key substitution
+        // Get hint text based on NPC preset ID with key substitution
+        String presetId = lastTargetNpc.getPresetId();
+        Component hintText;
+        if (presetId == null || presetId.isEmpty()) {
             hintText = Component.translatable("gui.talesmaker.interact.default", keyName);
+        } else {
+            String translationKey = "gui.talesmaker.interact." + presetId;
+            hintText = Component.translatable(translationKey, keyName);
+
+            // Check if translation exists, fallback to default
+            String translatedText = hintText.getString();
+            if (translatedText.equals(translationKey)) {
+                hintText = Component.translatable("gui.talesmaker.interact.default", keyName);
+            }
         }
 
         Font font = mc.font;
@@ -118,12 +124,17 @@ public class InteractHintOverlay {
 
         int screenWidth = mc.getWindow().getGuiScaledWidth();
         int screenHeight = mc.getWindow().getGuiScaledHeight();
+        float uiScale = calculateUiScale(screenWidth, screenHeight);
+        int paddingH = scaleInt(PADDING_H, uiScale);
+        int paddingV = scaleInt(PADDING_V, uiScale);
+        int marginRight = scaleInt(MARGIN_RIGHT, uiScale);
+        int marginBottom = scaleInt(MARGIN_BOTTOM, uiScale);
 
-        int boxWidth = textWidth + PADDING_H * 2;
-        int boxHeight = textHeight + PADDING_V * 2;
+        int boxWidth = textWidth + paddingH * 2;
+        int boxHeight = textHeight + paddingV * 2;
 
-        int x = screenWidth - boxWidth - MARGIN_RIGHT;
-        int y = screenHeight - boxHeight - MARGIN_BOTTOM;
+        int x = screenWidth - boxWidth - marginRight;
+        int y = screenHeight - boxHeight - marginBottom;
 
         // Draw semi-transparent background
         int bgColor = (alphaInt / 2) << 24; // Semi-transparent black
@@ -131,7 +142,7 @@ public class InteractHintOverlay {
 
         // Draw text
         int textColor = (alphaInt << 24) | 0xFFFFFF;
-        graphics.drawString(font, hintText, x + PADDING_H, y + PADDING_V, textColor, false);
+        graphics.drawString(font, hintText, x + paddingH, y + paddingV, textColor, false);
     }
 
     private static NpcEntity findLookedAtInteractableNpc(Minecraft mc) {
@@ -169,5 +180,15 @@ public class InteractHintOverlay {
         }
 
         return closestNpc;
+    }
+
+    private static float calculateUiScale(int width, int height) {
+        float scaleW = width / (float) BASE_WIDTH;
+        float scaleH = height / (float) BASE_HEIGHT;
+        return Math.max(1.0f, Math.min(scaleW, scaleH));
+    }
+
+    private static int scaleInt(int value, float scale) {
+        return Math.max(1, Math.round(value * scale));
     }
 }

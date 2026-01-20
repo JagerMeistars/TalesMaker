@@ -26,6 +26,8 @@ public class ResourceErrorOverlay {
     private static final int MARGIN = 4;
     private static final int ICON_WIDTH = 14;
     private static final int SLIDE_DISTANCE = 40; // Pixels to slide when fading
+    private static final int BASE_WIDTH = 960;
+    private static final int BASE_HEIGHT = 540;
 
     // Warning triangle icon
     private static final String ICON_WARNING = "\u26A0";
@@ -49,7 +51,15 @@ public class ResourceErrorOverlay {
         GuiGraphics graphics = event.getGuiGraphics();
         Font font = mc.font;
 
-        int baseY = PADDING;
+        int screenWidth = mc.getWindow().getGuiScaledWidth();
+        int screenHeight = mc.getWindow().getGuiScaledHeight();
+        float uiScale = calculateUiScale(screenWidth, screenHeight);
+        int padding = scaleInt(PADDING, uiScale);
+        int margin = scaleInt(MARGIN, uiScale);
+        int iconWidth = scaleInt(ICON_WIDTH, uiScale);
+        int lineHeight = Math.max(font.lineHeight, scaleInt(LINE_HEIGHT, uiScale));
+        int slideDistance = scaleInt(SLIDE_DISTANCE, uiScale);
+        int baseY = padding;
 
         for (ResourceErrorManager.ResourceError error : errors) {
             float appearProgress = error.getAppearProgress();
@@ -61,7 +71,7 @@ public class ResourceErrorOverlay {
             float easedFade = fadeProgress * fadeProgress;
 
             // Calculate Y offset for slide-up animation when fading
-            int slideUpOffset = (int) (easedFade * SLIDE_DISTANCE);
+            int slideUpOffset = (int) (easedFade * slideDistance);
 
             int y = baseY - slideUpOffset;
 
@@ -85,26 +95,36 @@ public class ResourceErrorOverlay {
             String displayText = sb.toString();
 
             // Calculate width based on text
-            int textWidth = font.width(ICON_WARNING) + PADDING + font.width(displayText);
-            int errorWidth = textWidth + PADDING * 2 + ICON_WIDTH;
+            int textWidth = font.width(ICON_WARNING) + padding + font.width(displayText);
+            int errorWidth = textWidth + padding * 2 + iconWidth;
 
             // Calculate X with slide-in from left (based on this error's width)
-            int appearSlide = errorWidth + PADDING;
+            int appearSlide = errorWidth + padding;
             int slideInOffset = (int) ((1f - easedAppear) * appearSlide);
-            int x = PADDING - slideInOffset;
+            int x = padding - slideInOffset;
 
             // Calculate height (single line)
-            int contentHeight = LINE_HEIGHT + MARGIN * 2;
+            int contentHeight = lineHeight + margin * 2;
 
             // Draw background
             graphics.fill(x, y, x + errorWidth, y + contentHeight, bgColor);
 
             // Draw icon and text centered vertically
-            int textY = y + MARGIN + (LINE_HEIGHT - font.lineHeight) / 2;
-            graphics.drawString(font, ICON_WARNING, x + PADDING, textY, textColor, false);
-            graphics.drawString(font, displayText, x + PADDING + ICON_WIDTH, textY, textColor, false);
+            int textY = y + margin + (lineHeight - font.lineHeight) / 2;
+            graphics.drawString(font, ICON_WARNING, x + padding, textY, textColor, false);
+            graphics.drawString(font, displayText, x + padding + iconWidth, textY, textColor, false);
 
-            baseY += contentHeight + MARGIN;
+            baseY += contentHeight + margin;
         }
+    }
+
+    private static float calculateUiScale(int width, int height) {
+        float scaleW = width / (float) BASE_WIDTH;
+        float scaleH = height / (float) BASE_HEIGHT;
+        return Math.max(1.0f, Math.min(scaleW, scaleH));
+    }
+
+    private static int scaleInt(int value, float scale) {
+        return Math.max(1, Math.round(value * scale));
     }
 }

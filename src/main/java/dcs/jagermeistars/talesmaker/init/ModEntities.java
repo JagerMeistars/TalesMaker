@@ -13,8 +13,8 @@ public class ModEntities {
             TalesMaker.MODID);
 
     public static final DeferredHolder<EntityType<?>, EntityType<NpcEntity>> NPC = ENTITIES.register("npc",
-            () -> EntityType.Builder.of(NpcEntity::new, MobCategory.CREATURE)
+            () -> EntityType.Builder.of(NpcEntity::new, MobCategory.MISC)
                     .sized(0.6F, 1.8F)
-                    .clientTrackingRange(10)
+                    .clientTrackingRange(64)
                     .build("npc"));
 }

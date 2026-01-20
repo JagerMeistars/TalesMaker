@@ -20,10 +20,11 @@ import java.util.Optional;
  *   "model": "namespace:geo/clue/item.geo.json",
  *   "texture": "namespace:textures/clue/item.png",
  *   "sound": "minecraft:entity.experience_orb.pickup",
+ *   "model_scale": 60.0,
  *   "clues": [
  *     {
  *       "name": {"text": "Clue Name"},
- *       "bone": "bone_name",
+ *       "bone": "cube_name",
  *       "description": {"text": "Clue description"},
  *       "command": "say Found clue!"
  *     }
@@ -39,6 +40,7 @@ public record CluePreset(
         ResourceLocation model,
         ResourceLocation texture,
         Optional<ResourceLocation> sound,
+        Optional<Float> modelScale,
         List<ClueData> clues,
         Optional<String> onComplete
 ) {
@@ -70,16 +72,17 @@ public record CluePreset(
             ResourceLocation.CODEC.fieldOf("model").forGetter(CluePreset::model),
             ResourceLocation.CODEC.fieldOf("texture").forGetter(CluePreset::texture),
             ResourceLocation.CODEC.optionalFieldOf("sound").forGetter(CluePreset::sound),
+            Codec.FLOAT.optionalFieldOf("model_scale").forGetter(CluePreset::modelScale),
             ClueData.CODEC.listOf().fieldOf("clues").forGetter(CluePreset::clues),
             Codec.STRING.optionalFieldOf("on_complete").forGetter(CluePreset::onComplete)
-    ).apply(instance, (name, belonging, description, model, texture, sound, clues, onComplete) ->
-            new CluePreset(null, name, belonging, description, model, texture, sound, clues, onComplete)));
+    ).apply(instance, (name, belonging, description, model, texture, sound, modelScale, clues, onComplete) ->
+            new CluePreset(null, name, belonging, description, model, texture, sound, modelScale, clues, onComplete)));
 
     /**
      * Create a copy with the full ResourceLocation ID set.
      */
     public CluePreset withId(ResourceLocation fullId) {
-        return new CluePreset(fullId, name, belonging, description, model, texture, sound, clues, onComplete);
+        return new CluePreset(fullId, name, belonging, description, model, texture, sound, modelScale, clues, onComplete);
     }
 
     /**

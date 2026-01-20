@@ -1,0 +1,35 @@
+{
+  "text": {
+    "text": "Tell me."
+  },
+  "mode": "full",
+  "timer": 10,
+  "timeout_choice": -1,
+  "choices": [
+    {
+      "text": {
+        "text": "I want life."
+      },
+      "command": "say @s chose life",
+      "locked": {
+        "advancement": "minecraft:adventure/totem_of_undying",
+        "message": {
+          "text": "You need all 10 hearts to pick this option.",
+          "color": "dark_purple"
+        }
+      }
+    },
+    {
+      "text": {
+        "text": "I want a friend."
+      },
+      "command": "say @s chose friendship"
+    },
+    {
+      "text": {
+        "text": "I want power."
+      },
+      "command": "say @s chose power"
+    }
+  ]
+}

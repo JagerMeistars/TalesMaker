@@ -17,7 +17,8 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  */
 public record DiscoverCluePacket(
         ResourceLocation presetId,
-        String clueId  // The bone name of the discovered clue
+        String clueId,  // The cube name of the discovered clue
+        boolean triggerCommand
 ) implements CustomPacketPayload {
 
     public static final Type<DiscoverCluePacket> TYPE = new Type<>(
@@ -26,6 +27,7 @@ public record DiscoverCluePacket(
     public static final StreamCodec<RegistryFriendlyByteBuf, DiscoverCluePacket> STREAM_CODEC = StreamCodec.composite(
             ResourceLocation.STREAM_CODEC, DiscoverCluePacket::presetId,
             ByteBufCodecs.STRING_UTF8, DiscoverCluePacket::clueId,
+            ByteBufCodecs.BOOL, DiscoverCluePacket::triggerCommand,
             DiscoverCluePacket::new
     );
 
@@ -70,29 +72,29 @@ public record DiscoverCluePacket(
                 return;
             }
 
-            // Play discovery sound
-            ResourceLocation soundId = preset.getDiscoverySound();
-            player.level().playSound(
-                    null,
-                    player.getX(), player.getY(), player.getZ(),
-                    net.minecraft.core.registries.BuiltInRegistries.SOUND_EVENT.get(soundId),
-                    SoundSource.PLAYERS,
-                    1.0f, 1.0f
-            );
+            if (packet.triggerCommand()) {
+                ResourceLocation soundId = preset.getDiscoverySound();
+                player.level().playSound(
+                        null,
+                        player.getX(), player.getY(), player.getZ(),
+                        net.minecraft.core.registries.BuiltInRegistries.SOUND_EVENT.get(soundId),
+                        SoundSource.PLAYERS,
+                        1.0f, 1.0f
+                );
 
-            // Execute clue command if present
-            if (clueData.command().isPresent()) {
-                String command = clueData.command().get();
-                try {
-                    player.getServer().getCommands().performPrefixedCommand(
-                            player.getServer().createCommandSourceStack()
-                                    .withEntity(player)
-                                    .withPosition(player.position()),
-                            command
-                    );
-                } catch (Exception e) {
-                    TalesMaker.LOGGER.error("Failed to execute clue command for player {}: {}",
-                            player.getName().getString(), command, e);
+                if (clueData.command().isPresent()) {
+                    String command = clueData.command().get();
+                    try {
+                        player.getServer().getCommands().performPrefixedCommand(
+                                player.getServer().createCommandSourceStack()
+                                        .withEntity(player)
+                                        .withPosition(player.position()),
+                                command
+                        );
+                    } catch (Exception e) {
+                        TalesMaker.LOGGER.error("Failed to execute clue command for player {}: {}",
+                                player.getName().getString(), command, e);
+                    }
                 }
             }
 

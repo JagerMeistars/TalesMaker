@@ -45,6 +45,12 @@ public class ModNetworking {
                 ClearHistoryPacket::handle
         );
 
+        registrar.playToClient(
+                BindActionPacket.TYPE,
+                BindActionPacket.STREAM_CODEC,
+                BindActionPacket::handle
+        );
+
         registrar.playToServer(
                 InteractScriptPacket.TYPE,
                 InteractScriptPacket.STREAM_CODEC,
@@ -116,3 +122,5 @@ public class ModNetworking {
         sendToAllPlayers(message, 2);
     }
 }
+
+

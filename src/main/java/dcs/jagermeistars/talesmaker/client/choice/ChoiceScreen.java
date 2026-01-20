@@ -1,7 +1,6 @@
 package dcs.jagermeistars.talesmaker.client.choice;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import dcs.jagermeistars.talesmaker.TalesMaker;
+import dcs.jagermeistars.talesmaker.client.dialogue.DialogueHistory;
 import dcs.jagermeistars.talesmaker.data.choice.ChoiceWindow;
 import dcs.jagermeistars.talesmaker.network.CloseChoicePacket;
 import dcs.jagermeistars.talesmaker.network.OpenChoicePacket;
@@ -29,84 +28,34 @@ public class ChoiceScreen extends Screen {
     // Colors
     private static final int COLOR_WHITE = 0xFFFFFFFF;
     private static final int COLOR_GRAY = 0xFF888888;
-    private static final int COLOR_PANEL_BG = 0xDD000000;
-    private static final int COLOR_BUTTON_BG = 0x88000000;
-    private static final int COLOR_BUTTON_HOVER = 0xAA333333;
+    private static final int COLOR_PANEL_BG = 0xB3000000;
+    private static final int COLOR_BUTTON_BG = 0x99000000;
+    private static final int COLOR_BUTTON_HOVER = 0xCC2A2A2A;
+    private static final int COLOR_BUTTON_LOCKED = 0x66000000;
     private static final int COLOR_TIMER_BAR = 0xFF44AA44;
-    private static final int COLOR_TIMER_BG = 0xFF222222;
-    private static final int COLOR_BORDER = 0xFF555555;
+    private static final int COLOR_TIMER_BG = 0xAA000000;
+    private static final int COLOR_BORDER = 0xFF444444;
 
-    // Text limits
-    private static final int MAX_CHARS_PER_LINE = 28;
-    private static final int BUTTON_PADDING_X = 15;
+    // Text limits (base values, scaled at runtime)
+    private static final int BUTTON_PADDING_X = 14;
 
-    // Scale factor for textures (2x scale for consistent pixel appearance)
-    private static final int TEXTURE_SCALE = 2;
-
-    // Button render sizes (on screen)
+    // Button render sizes (base on-screen values)
     private static final int BUTTON_WIDTH = 180;
-    private static final int BUTTON_HEIGHT_SMALL = 36;   // 1 line
-    private static final int BUTTON_HEIGHT_MEDIUM = 48;  // 2 lines
-    private static final int BUTTON_HEIGHT_LARGE = 60;   // 3 lines
+    private static final int BUTTON_HEIGHT_SMALL = 28;   // 1 line
+    private static final int BUTTON_HEIGHT_MEDIUM = 36;  // 2 lines
+    private static final int BUTTON_HEIGHT_LARGE = 44;   // 3 lines
 
-    // Button texture sizes (actual texture dimensions = render size / scale)
-    private static final int BUTTON_TEX_WIDTH = BUTTON_WIDTH / TEXTURE_SCALE;           // 100
-    private static final int BUTTON_TEX_HEIGHT_SMALL = BUTTON_HEIGHT_SMALL / TEXTURE_SCALE;   // 10
-    private static final int BUTTON_TEX_HEIGHT_MEDIUM = BUTTON_HEIGHT_MEDIUM / TEXTURE_SCALE; // 18
-    private static final int BUTTON_TEX_HEIGHT_LARGE = BUTTON_HEIGHT_LARGE / TEXTURE_SCALE;   // 26
+    // Dialog panel render size (base on-screen values)
+    private static final int PANEL_WIDTH = 520;
+    private static final int PANEL_PADDING_X = 16;
+    private static final int PANEL_PADDING_TOP = 10;
+    private static final int PANEL_PADDING_BOTTOM = 12;
+    private static final int PANEL_TEXT_GAP = 6;
+    private static final int PANEL_MIN_HEIGHT = 60;
 
-    // Dialog panel render size (on screen)
-    private static final int PANEL_WIDTH = 600;
-    private static final int PANEL_HEIGHT = 84;
-
-    // Dialog panel texture size (actual texture dimensions)
-    private static final int PANEL_TEX_WIDTH = PANEL_WIDTH / TEXTURE_SCALE;   // 320
-    private static final int PANEL_TEX_HEIGHT = PANEL_HEIGHT / TEXTURE_SCALE; // 36
-
-    // Button textures - Small (1 line)
-    private static final ResourceLocation BUTTON_SMALL =
-            ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/gui/choice/button_small.png");
-    private static final ResourceLocation BUTTON_SMALL_HOVER =
-            ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/gui/choice/button_small_hover.png");
-    private static final ResourceLocation BUTTON_SMALL_LOCKED =
-            ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/gui/choice/button_small_locked.png");
-    private static final ResourceLocation BUTTON_SMALL_LOCKED_HOVER =
-            ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/gui/choice/button_small_locked_hover.png");
-
-    // Button textures - Medium (2 lines)
-    private static final ResourceLocation BUTTON_MEDIUM =
-            ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/gui/choice/button_medium.png");
-    private static final ResourceLocation BUTTON_MEDIUM_HOVER =
-            ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/gui/choice/button_medium_hover.png");
-    private static final ResourceLocation BUTTON_MEDIUM_LOCKED =
-            ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/gui/choice/button_medium_locked.png");
-    private static final ResourceLocation BUTTON_MEDIUM_LOCKED_HOVER =
-            ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/gui/choice/button_medium_locked_hover.png");
-
-    // Button textures - Large (3 lines)
-    private static final ResourceLocation BUTTON_LARGE =
-            ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/gui/choice/button_large.png");
-    private static final ResourceLocation BUTTON_LARGE_HOVER =
-            ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/gui/choice/button_large_hover.png");
-    private static final ResourceLocation BUTTON_LARGE_LOCKED =
-            ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/gui/choice/button_large_locked.png");
-    private static final ResourceLocation BUTTON_LARGE_LOCKED_HOVER =
-            ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/gui/choice/button_large_locked_hover.png");
-
-    // Dialog panel texture
-    private static final ResourceLocation DIALOG_PANEL_TEXTURE =
-            ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID, "textures/gui/choice/dialog_panel.png");
-
-    // Timer textures (12 frames)
-    private static final int TIMER_SIZE = 64;  // Render size on screen
-    private static final int TIMER_TEX_SIZE = TIMER_SIZE / TEXTURE_SCALE;  // Texture size (32x32)
-    private static final ResourceLocation[] TIMER_TEXTURES = new ResourceLocation[12];
-    static {
-        for (int i = 0; i < 12; i++) {
-            TIMER_TEXTURES[i] = ResourceLocation.fromNamespaceAndPath(TalesMaker.MODID,
-                    "textures/gui/choice/timer_" + (i + 1) + ".png");
-        }
-    }
+    // Timer (simple box)
+    private static final int TIMER_SIZE = 54;  // Base render size on screen
+    private static final int TIMER_BAR_HEIGHT = 4;
 
     // Button size enum
     private enum ButtonSize {
@@ -114,54 +63,26 @@ public class ChoiceScreen extends Screen {
         MEDIUM(BUTTON_HEIGHT_MEDIUM, 2),
         LARGE(BUTTON_HEIGHT_LARGE, 3);
 
-        final int height;
+        final int baseHeight;
         final int lines;
 
-        ButtonSize(int height, int lines) {
-            this.height = height;
+        ButtonSize(int baseHeight, int lines) {
+            this.baseHeight = baseHeight;
             this.lines = lines;
+        }
+
+        int getHeight(float scale) {
+            return Math.max(1, Math.round(baseHeight * scale));
         }
     }
 
     /**
      * Determines button size based on text length.
      */
-    private static ButtonSize getButtonSize(String text) {
-        int len = text.length();
-        if (len <= MAX_CHARS_PER_LINE) return ButtonSize.SMALL;
-        if (len <= MAX_CHARS_PER_LINE * 2) return ButtonSize.MEDIUM;
+    private static ButtonSize getButtonSize(int lineCount) {
+        if (lineCount <= 1) return ButtonSize.SMALL;
+        if (lineCount <= 2) return ButtonSize.MEDIUM;
         return ButtonSize.LARGE;
-    }
-
-    /**
-     * Splits text into lines of maximum maxChars characters, breaking at word boundaries.
-     */
-    private static List<String> splitText(String text, int maxChars) {
-        List<String> lines = new ArrayList<>();
-        if (text.length() <= maxChars) {
-            lines.add(text);
-            return lines;
-        }
-
-        String[] words = text.split(" ");
-        StringBuilder currentLine = new StringBuilder();
-
-        for (String word : words) {
-            if (currentLine.length() == 0) {
-                currentLine.append(word);
-            } else if (currentLine.length() + 1 + word.length() <= maxChars) {
-                currentLine.append(" ").append(word);
-            } else {
-                lines.add(currentLine.toString());
-                currentLine = new StringBuilder(word);
-            }
-        }
-
-        if (currentLine.length() > 0) {
-            lines.add(currentLine.toString());
-        }
-
-        return lines;
     }
 
     private final ResourceLocation windowId;
@@ -184,6 +105,19 @@ public class ChoiceScreen extends Screen {
     private int dialogPanelTop;
     private int dialogPanelHeight;
     private List<FormattedCharSequence> wrappedDialogue;
+    private float uiScale = 1.0f;
+    private int scaledPanelWidth;
+    private int scaledPanelHeight;
+    private int scaledButtonWidth;
+    private int scaledButtonPaddingX;
+    private int scaledTimerSize;
+    private int scaledMargin;
+    private int scaledSpacing;
+    private int scaledPanelPaddingX;
+    private int scaledPanelPaddingTop;
+    private int scaledPanelPaddingBottom;
+    private int scaledPanelTextGap;
+    private int scaledTimerBarHeight;
 
     public ChoiceScreen(ResourceLocation windowId, Entity speaker, Component speakerName,
                         Component dialogueText, List<OpenChoicePacket.ClientChoice> choices,
@@ -205,6 +139,22 @@ public class ChoiceScreen extends Screen {
     protected void init() {
         super.init();
         timerStartTime = System.currentTimeMillis();
+        uiScale = calculateUiScale();
+        scaledMargin = scaleInt(14);
+        int maxPanelWidth = Math.max(1, width - scaledMargin * 2);
+        int minPanelWidth = Math.min(scaleInt(200), maxPanelWidth);
+        scaledPanelWidth = Math.max(minPanelWidth, Math.min(scaleInt(PANEL_WIDTH), maxPanelWidth));
+        int maxButtonWidth = Math.max(1, width - scaledMargin * 2);
+        int minButtonWidth = Math.min(scaleInt(120), maxButtonWidth);
+        scaledButtonWidth = Math.max(minButtonWidth, Math.min(scaleInt(BUTTON_WIDTH), maxButtonWidth));
+        scaledButtonPaddingX = scaleInt(BUTTON_PADDING_X);
+        scaledTimerSize = scaleInt(TIMER_SIZE);
+        scaledTimerBarHeight = scaleInt(TIMER_BAR_HEIGHT);
+        scaledSpacing = scaleInt(5);
+        scaledPanelPaddingX = scaleInt(PANEL_PADDING_X);
+        scaledPanelPaddingTop = scaleInt(PANEL_PADDING_TOP);
+        scaledPanelPaddingBottom = scaleInt(PANEL_PADDING_BOTTOM);
+        scaledPanelTextGap = scaleInt(PANEL_TEXT_GAP);
 
         if (isDialogMode()) {
             initDialogMode();
@@ -221,25 +171,31 @@ public class ChoiceScreen extends Screen {
      * Initialize dialog mode: panel at bottom, choices at top-left.
      */
     private void initDialogMode() {
-        // Dialog panel at bottom (fixed size, width multiple of 16)
-        dialogPanelHeight = PANEL_HEIGHT;
-        dialogPanelTop = height - dialogPanelHeight;
-
         // Wrap dialogue text for panel
-        int textWidth = PANEL_WIDTH - 30;
+        int textWidth = Math.max(1, scaledPanelWidth - scaledPanelPaddingX * 2);
         wrappedDialogue = font.split(dialogueText, textWidth);
+        int textHeight = wrappedDialogue.size() * font.lineHeight
+                + Math.max(0, wrappedDialogue.size() - 1) * scaleInt(1);
+
+        // Dialog panel at bottom with content-based height
+        dialogPanelHeight = scaledPanelPaddingTop + font.lineHeight + scaledPanelTextGap
+                + textHeight + scaledPanelPaddingBottom;
+        dialogPanelHeight = Math.max(dialogPanelHeight, scaleInt(PANEL_MIN_HEIGHT));
+        int maxPanelHeight = Math.max(1, height - scaledMargin * 2);
+        dialogPanelHeight = Math.min(dialogPanelHeight, maxPanelHeight);
+        dialogPanelTop = height - dialogPanelHeight;
 
         // Choice buttons at top-left with dynamic sizing
         choiceButtons = new ArrayList<>();
-        int buttonX = 20;
-        int buttonY = 20;
-        int spacing = 4;
+        int buttonX = scaledMargin;
+        int buttonY = scaledMargin + scaleInt(4);
+        int spacing = scaledSpacing;
 
         for (int i = 0; i < choices.size(); i++) {
             OpenChoicePacket.ClientChoice choice = choices.get(i);
-            String textStr = choice.text().getString();
-            ButtonSize size = getButtonSize(textStr);
-            List<String> lines = splitText(textStr, MAX_CHARS_PER_LINE);
+            int maxTextWidth = Math.max(1, scaledButtonWidth - scaledButtonPaddingX * 2);
+            List<FormattedCharSequence> lines = font.split(choice.text(), maxTextWidth);
+            ButtonSize size = getButtonSize(lines.size());
 
             // Limit lines to max for size
             if (lines.size() > size.lines) {
@@ -247,11 +203,11 @@ public class ChoiceScreen extends Screen {
             }
 
             choiceButtons.add(new ChoiceButton(
-                    buttonX, buttonY, BUTTON_WIDTH, size.height,
+                    buttonX, buttonY, scaledButtonWidth, size.getHeight(uiScale),
                     i, choice.text(), choice.locked(), choice.lockedMessage(),
                     size, lines
             ));
-            buttonY += size.height + spacing;
+            buttonY += size.getHeight(uiScale) + spacing;
         }
     }
 
@@ -260,18 +216,19 @@ public class ChoiceScreen extends Screen {
      */
     private void initFullMode() {
         choiceButtons = new ArrayList<>();
-        int startX = 20;
-        int startY = 40 + font.lineHeight + 20; // Below question text
-        int buttonHeight = font.lineHeight + 8;
-        int spacing = 4;
+        int startX = scaledMargin;
+        int questionY = scaleInt(40);
+        int startY = questionY + font.lineHeight + scaleInt(20); // Below question text
+        int buttonHeight = font.lineHeight + scaleInt(8);
+        int spacing = scaledSpacing;
 
         for (int i = 0; i < choices.size(); i++) {
             OpenChoicePacket.ClientChoice choice = choices.get(i);
             String textStr = choice.text().getString();
-            int textWidth = font.width(textStr) + 30; // Extra for lock icon
-            List<String> lines = List.of(textStr); // Single line for full mode
+            int textWidth = font.width(textStr) + scaleInt(30); // Extra for lock icon
+            List<FormattedCharSequence> lines = List.of();
             choiceButtons.add(new ChoiceButton(
-                    startX, startY, Math.max(textWidth, 150), buttonHeight,
+                    startX, startY, Math.max(textWidth, scaleInt(150)), buttonHeight,
                     i, choice.text(), choice.locked(), choice.lockedMessage(),
                     ButtonSize.SMALL, lines
             ));
@@ -315,22 +272,19 @@ public class ChoiceScreen extends Screen {
      */
     private void renderDialogMode(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         // Dialog panel - centered at bottom with fixed size
-        int panelLeft = (width - PANEL_WIDTH) / 2;
-
-        // Dialog panel background with fixed texture (scaled 2x)
-        // blit(texture, x, y, width, height, u, v, uWidth, vHeight, texWidth, texHeight)
-        RenderSystem.enableBlend();
-        graphics.blit(DIALOG_PANEL_TEXTURE, panelLeft, dialogPanelTop, PANEL_WIDTH, PANEL_HEIGHT, 0, 0, PANEL_TEX_WIDTH, PANEL_TEX_HEIGHT, PANEL_TEX_WIDTH, PANEL_TEX_HEIGHT);
-        RenderSystem.disableBlend();
+        int panelLeft = (width - scaledPanelWidth) / 2;
+        drawPanelBackground(graphics, panelLeft, dialogPanelTop, scaledPanelWidth, dialogPanelHeight);
 
         // Speaker name (uses color from Component)
-        graphics.drawString(font, speakerName, panelLeft + 32, dialogPanelTop + 11, 0xFFFFFFFF);
+        int nameX = panelLeft + scaledPanelPaddingX;
+        int nameY = dialogPanelTop + scaledPanelPaddingTop;
+        graphics.drawString(font, speakerName, nameX, nameY, COLOR_WHITE);
 
         // Dialogue text (below speaker name with small gap)
-        int textY = dialogPanelTop + 18 + font.lineHeight + 7;
+        int textY = nameY + font.lineHeight + scaledPanelTextGap;
         for (FormattedCharSequence line : wrappedDialogue) {
-            graphics.drawString(font, line, panelLeft + 12, textY, COLOR_WHITE);
-            textY += font.lineHeight + 1;
+            graphics.drawString(font, line, panelLeft + scaledPanelPaddingX, textY, COLOR_WHITE);
+            textY += font.lineHeight + scaleInt(1);
         }
 
         // Render choice buttons (dialog style with background)
@@ -343,15 +297,13 @@ public class ChoiceScreen extends Screen {
      * Render a dialog-style button with fixed-size background texture.
      */
     private void renderDialogButton(GuiGraphics graphics, ChoiceButton button, boolean hovered) {
-        // Select texture based on size and state
-        ResourceLocation buttonTexture = getButtonTexture(button.size, button.locked, hovered);
-
-        // Render button background (scaled 2x from texture size)
-        // blit(texture, x, y, width, height, u, v, uWidth, vHeight, texWidth, texHeight)
-        int texHeight = getButtonTextureHeight(button.size);
-        RenderSystem.enableBlend();
-        graphics.blit(buttonTexture, button.x, button.y, button.width, button.height, 0, 0, BUTTON_TEX_WIDTH, texHeight, BUTTON_TEX_WIDTH, texHeight);
-        RenderSystem.disableBlend();
+        int bgColor;
+        if (button.locked) {
+            bgColor = COLOR_BUTTON_LOCKED;
+        } else {
+            bgColor = hovered ? COLOR_BUTTON_HOVER : COLOR_BUTTON_BG;
+        }
+        drawPanelBackground(graphics, button.x, button.y, button.width, button.height, bgColor);
 
         // Text color
         int textColor = button.locked ? COLOR_GRAY : COLOR_WHITE;
@@ -361,7 +313,7 @@ public class ChoiceScreen extends Screen {
         int textY = button.y + (button.height - totalTextHeight) / 2;
 
         // Render each line of text (centered horizontally, no shadow)
-        for (String line : button.lines) {
+        for (FormattedCharSequence line : button.lines) {
             int lineWidth = font.width(line);
             int textX = button.x + (button.width - lineWidth) / 2;
 
@@ -379,46 +331,11 @@ public class ChoiceScreen extends Screen {
     }
 
     /**
-     * Get the appropriate texture for button based on size and state.
-     */
-    private ResourceLocation getButtonTexture(ButtonSize size, boolean locked, boolean hovered) {
-        if (size == ButtonSize.SMALL) {
-            if (locked) {
-                return hovered ? BUTTON_SMALL_LOCKED_HOVER : BUTTON_SMALL_LOCKED;
-            }
-            return hovered ? BUTTON_SMALL_HOVER : BUTTON_SMALL;
-        } else if (size == ButtonSize.MEDIUM) {
-            if (locked) {
-                return hovered ? BUTTON_MEDIUM_LOCKED_HOVER : BUTTON_MEDIUM_LOCKED;
-            }
-            return hovered ? BUTTON_MEDIUM_HOVER : BUTTON_MEDIUM;
-        } else {
-            if (locked) {
-                return hovered ? BUTTON_LARGE_LOCKED_HOVER : BUTTON_LARGE_LOCKED;
-            }
-            return hovered ? BUTTON_LARGE_HOVER : BUTTON_LARGE;
-        }
-    }
-
-    /**
-     * Get the texture height for a button size.
-     */
-    private int getButtonTextureHeight(ButtonSize size) {
-        if (size == ButtonSize.SMALL) {
-            return BUTTON_TEX_HEIGHT_SMALL;
-        } else if (size == ButtonSize.MEDIUM) {
-            return BUTTON_TEX_HEIGHT_MEDIUM;
-        } else {
-            return BUTTON_TEX_HEIGHT_LARGE;
-        }
-    }
-
-    /**
      * Render full mode: question at top, choices as simple text below.
      */
     private void renderFullMode(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         // Question text at top-left
-        graphics.drawString(font, dialogueText, 20, 40, COLOR_WHITE);
+        graphics.drawString(font, dialogueText, scaledMargin, scaleInt(40), COLOR_WHITE);
 
         // Render choice buttons (simple text style)
         for (ChoiceButton button : choiceButtons) {
@@ -458,19 +375,16 @@ public class ChoiceScreen extends Screen {
             return;
         }
 
-        // Calculate which frame to show (0-11 based on progress)
         float progress = remainingSeconds / timerSeconds;
-        int frameIndex = Math.min(11, (int) ((1.0f - progress) * 12));
 
         // Timer position (top-right corner)
-        int timerX = width - TIMER_SIZE - 20;
-        int timerY = 20;
+        int timerX = width - scaledTimerSize - scaledMargin;
+        int timerY = scaledMargin;
 
-        // Render timer texture
-        RenderSystem.enableBlend();
-        graphics.blit(TIMER_TEXTURES[frameIndex], timerX, timerY, TIMER_SIZE, TIMER_SIZE,
-                0, 0, TIMER_TEX_SIZE, TIMER_TEX_SIZE, TIMER_TEX_SIZE, TIMER_TEX_SIZE);
-        RenderSystem.disableBlend();
+        drawPanelBackground(graphics, timerX, timerY, scaledTimerSize, scaledTimerSize, COLOR_TIMER_BG);
+        int barWidth = (int) (scaledTimerSize * progress);
+        int barY = timerY + scaledTimerSize - scaledTimerBarHeight;
+        graphics.fill(timerX, barY, timerX + barWidth, barY + scaledTimerBarHeight, COLOR_TIMER_BAR);
 
         // Draw seconds number in center (scaled 2x, without shadow)
         String timeText = String.valueOf((int) Math.ceil(remainingSeconds));
@@ -478,12 +392,12 @@ public class ChoiceScreen extends Screen {
         int textHeight = font.lineHeight;
 
         // Scale text by 2x
-        float scale = 2.0f;
+        float scale = Math.max(1.0f, 2.0f * uiScale);
         int scaledTextWidth = (int) (textWidth * scale);
         int scaledTextHeight = (int) (textHeight * scale);
 
-        int textX = timerX + (TIMER_SIZE - scaledTextWidth) / 2;
-        int textY = timerY + (TIMER_SIZE - scaledTextHeight) / 2;
+        int textX = timerX + (scaledTimerSize - scaledTextWidth) / 2;
+        int textY = timerY + (scaledTimerSize - scaledTextHeight) / 2;
 
         graphics.pose().pushPose();
         graphics.pose().translate(textX, textY, 0);
@@ -518,6 +432,7 @@ public class ChoiceScreen extends Screen {
             selectedIndex = validChoices.get(new Random().nextInt(validChoices.size()));
         }
 
+        DialogueHistory.addChoiceEntry(choices.get(selectedIndex).text());
         // Send selection
         PacketDistributor.sendToServer(new SelectChoicePacket(windowId, selectedIndex, speaker.getId()));
         onClose();
@@ -528,6 +443,7 @@ public class ChoiceScreen extends Screen {
         if (button == 0 && hoveredChoice >= 0) {
             ChoiceButton clicked = choiceButtons.get(hoveredChoice);
             if (!clicked.locked) {
+                DialogueHistory.addChoiceEntry(clicked.text);
                 PacketDistributor.sendToServer(new SelectChoicePacket(
                         windowId, hoveredChoice, speaker.getId()
                 ));
@@ -582,11 +498,11 @@ public class ChoiceScreen extends Screen {
         final boolean locked;
         final Component lockedMessage;
         final ButtonSize size;
-        final List<String> lines;
+        final List<FormattedCharSequence> lines;
 
         ChoiceButton(int x, int y, int width, int height, int index,
                      Component text, boolean locked, Component lockedMessage,
-                     ButtonSize size, List<String> lines) {
+                     ButtonSize size, List<FormattedCharSequence> lines) {
             this.x = x;
             this.y = y;
             this.width = width;
@@ -602,5 +518,29 @@ public class ChoiceScreen extends Screen {
         boolean isMouseOver(double mouseX, double mouseY) {
             return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
         }
+    }
+
+    private void drawPanelBackground(GuiGraphics graphics, int x, int y, int width, int height) {
+        drawPanelBackground(graphics, x, y, width, height, COLOR_PANEL_BG);
+    }
+
+    private void drawPanelBackground(GuiGraphics graphics, int x, int y, int width, int height, int fillColor) {
+        graphics.fill(x, y, x + width, y + height, fillColor);
+        graphics.fill(x, y, x + width, y + 1, COLOR_BORDER);
+        graphics.fill(x, y + height - 1, x + width, y + height, COLOR_BORDER);
+        graphics.fill(x, y, x + 1, y + height, COLOR_BORDER);
+        graphics.fill(x + width - 1, y, x + width, y + height, COLOR_BORDER);
+    }
+
+    private int scaleInt(int value) {
+        return Math.max(1, Math.round(value * uiScale));
+    }
+
+    private float calculateUiScale() {
+        float baseWidth = 960.0f;
+        float baseHeight = 540.0f;
+        float scaleW = width / baseWidth;
+        float scaleH = height / baseHeight;
+        return Math.max(1.0f, Math.min(scaleW, scaleH));
     }
 }
