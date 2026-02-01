@@ -6,6 +6,7 @@ import dcs.jagermeistars.talesmaker.client.bind.BindManager;
 import dcs.jagermeistars.talesmaker.client.choice.ChoiceCameraController;
 import dcs.jagermeistars.talesmaker.client.dialogue.DialogueHistory;
 import dcs.jagermeistars.talesmaker.client.dialogue.DialogueHistoryScreen;
+import dcs.jagermeistars.talesmaker.client.tutorial.TutorialClientManager;
 import dcs.jagermeistars.talesmaker.client.model.NpcModel;
 import dcs.jagermeistars.talesmaker.client.notification.ResourceErrorManager;
 import dcs.jagermeistars.talesmaker.client.renderer.NpcRenderer;
@@ -95,6 +96,7 @@ public class TalesMakerClient {
 
     private void onPlayerLoggedOut(ClientPlayerNetworkEvent.LoggingOut event) {
         DialogueHistory.onWorldLeave();
+        TutorialClientManager.resetClientState();
     }
 
     private void onRenderTick(RenderFrameEvent.Pre event) {

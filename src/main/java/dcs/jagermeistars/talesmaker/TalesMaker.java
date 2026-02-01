@@ -8,6 +8,7 @@ import dcs.jagermeistars.talesmaker.command.TalesMakerCommands;
 import dcs.jagermeistars.talesmaker.data.NpcPresetManager;
 import dcs.jagermeistars.talesmaker.data.choice.ChoiceWindowManager;
 import dcs.jagermeistars.talesmaker.data.clue.CluePresetManager;
+import dcs.jagermeistars.talesmaker.data.tutorial.TutorialPresetManager;
 import dcs.jagermeistars.talesmaker.entity.NpcEntity;
 import dcs.jagermeistars.talesmaker.init.ModEntities;
 import net.neoforged.bus.api.IEventBus;
@@ -28,6 +29,7 @@ public class TalesMaker {
     public static final NpcPresetManager PRESET_MANAGER = new NpcPresetManager();
     public static final ChoiceWindowManager CHOICE_MANAGER = new ChoiceWindowManager();
     public static final CluePresetManager CLUE_MANAGER = new CluePresetManager();
+    public static final TutorialPresetManager TUTORIAL_MANAGER = new TutorialPresetManager();
 
     public TalesMaker(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::commonSetup);
@@ -63,5 +65,6 @@ public class TalesMaker {
         event.addListener(PRESET_MANAGER);
         event.addListener(CHOICE_MANAGER);
         event.addListener(CLUE_MANAGER);
+        event.addListener(TUTORIAL_MANAGER);
     }
 }

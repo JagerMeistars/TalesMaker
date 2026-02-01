@@ -27,7 +27,7 @@ public class DialogueOverlay {
 
     @SubscribeEvent
     public static void onRenderGui(RenderGuiLayerEvent.Post event) {
-        if (!event.getName().equals(VanillaGuiLayers.HOTBAR)) {
+        if (!event.getName().equals(VanillaGuiLayers.CROSSHAIR)) {
             return;
         }
 

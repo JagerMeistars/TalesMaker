@@ -1,0 +1,43 @@
+{
+  "type": "forced",
+  "title": {
+    "text": "Обучение: Взаимодействие"
+  },
+  "description": {
+    "text": "Кликните ПКМ по подсвеченной области, чтобы продолжить."
+  },
+  "steps": [
+    {
+      "text": {
+        "text": "Это пример шага. Нажмите ПКМ, чтобы перейти дальше."
+      },
+      "cutout": {
+        "x": 0.45,
+        "y": 0.45,
+        "width": 0.1,
+        "height": 0.1
+      },
+      "advance_key": "key.mouse.right"
+    },
+    {
+      "text": {
+        "text": "Можно задать другую клавишу. Нажмите E."
+      },
+      "cutout": {
+        "x": 0.1,
+        "y": 0.8,
+        "width": 0.2,
+        "height": 0.1
+      },
+      "advance_key": "key.keyboard.e",
+      "open_screen": "inventory",
+      "allow_interaction": true
+    }
+  ]
+  ,
+  "sounds": {
+    "open": "minecraft:ui.toast.in",
+    "close": "minecraft:ui.toast.out",
+    "advance": "minecraft:ui.button.click"
+  }
+}

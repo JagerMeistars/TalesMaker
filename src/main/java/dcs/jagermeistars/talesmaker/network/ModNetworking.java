@@ -51,6 +51,18 @@ public class ModNetworking {
                 BindActionPacket::handle
         );
 
+        registrar.playToClient(
+                InventoryControlPacket.TYPE,
+                InventoryControlPacket.STREAM_CODEC,
+                InventoryControlPacket::handle
+        );
+
+        registrar.playToClient(
+                TutorialStartPacket.TYPE,
+                TutorialStartPacket.STREAM_CODEC,
+                TutorialStartPacket::handle
+        );
+
         registrar.playToServer(
                 InteractScriptPacket.TYPE,
                 InteractScriptPacket.STREAM_CODEC,
@@ -74,6 +86,18 @@ public class ModNetworking {
                 CloseChoicePacket.TYPE,
                 CloseChoicePacket.STREAM_CODEC,
                 CloseChoicePacket::handle
+        );
+
+        registrar.playToServer(
+                TutorialStatePacket.TYPE,
+                TutorialStatePacket.STREAM_CODEC,
+                TutorialStatePacket::handle
+        );
+
+        registrar.playToServer(
+                TutorialStepStatePacket.TYPE,
+                TutorialStepStatePacket.STREAM_CODEC,
+                TutorialStepStatePacket::handle
         );
 
         // Clue inspection system packets

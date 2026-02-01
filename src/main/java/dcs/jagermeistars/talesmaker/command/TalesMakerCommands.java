@@ -12,9 +12,13 @@ import dcs.jagermeistars.talesmaker.data.NpcPreset;
 import dcs.jagermeistars.talesmaker.data.choice.Choice;
 import dcs.jagermeistars.talesmaker.data.choice.ChoiceWindow;
 import dcs.jagermeistars.talesmaker.data.clue.CluePreset;
+import dcs.jagermeistars.talesmaker.data.tutorial.TutorialPreset;
+import dcs.jagermeistars.talesmaker.data.tutorial.TutorialStep;
 import dcs.jagermeistars.talesmaker.server.ClueSessionManager;
 import dcs.jagermeistars.talesmaker.entity.NpcEntity;
 import dcs.jagermeistars.talesmaker.init.ModEntities;
+import dcs.jagermeistars.talesmaker.inventory.InventoryControlManager;
+import dcs.jagermeistars.talesmaker.inventory.InventoryRestrictions;
 import dcs.jagermeistars.talesmaker.monologue.MonologueManager;
 import dcs.jagermeistars.talesmaker.network.BindActionPacket;
 import dcs.jagermeistars.talesmaker.network.ClearHistoryPacket;
@@ -22,6 +26,8 @@ import dcs.jagermeistars.talesmaker.network.DialoguePacket;
 import dcs.jagermeistars.talesmaker.network.DialogueTimesPacket;
 import dcs.jagermeistars.talesmaker.network.OpenChoicePacket;
 import dcs.jagermeistars.talesmaker.network.OpenCluePacket;
+import dcs.jagermeistars.talesmaker.network.TutorialStartPacket;
+import dcs.jagermeistars.talesmaker.tutorial.TutorialSessionManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -90,6 +96,13 @@ public class TalesMakerCommands {
     private static final SuggestionProvider<CommandSourceStack> CLUE_SUGGESTIONS = (context, builder) -> {
         return SharedSuggestionProvider.suggest(
                 TalesMaker.CLUE_MANAGER.getAllPresets().keySet().stream()
+                        .map(ResourceLocation::toString),
+                builder);
+    };
+
+    private static final SuggestionProvider<CommandSourceStack> TUTORIAL_SUGGESTIONS = (context, builder) -> {
+        return SharedSuggestionProvider.suggest(
+                TalesMaker.TUTORIAL_MANAGER.getAllPresets().keySet().stream()
                         .map(ResourceLocation::toString),
                 builder);
     };
@@ -250,6 +263,20 @@ public class TalesMakerCommands {
                                         .then(Commands.argument("targets", EntityArgument.entities())
                                                 .then(Commands.argument("message", ComponentArgument.textComponent(buildContext))
                                                         .executes(TalesMakerCommands::dialogueBySelector)))))
+                        .then(Commands.literal("ui")
+                                .then(Commands.literal("inventory_lock")
+                                        .then(Commands.argument("players", EntityArgument.players())
+                                                .then(Commands.argument("value", BoolArgumentType.bool())
+                                                        .executes(TalesMakerCommands::uiInventoryLock))))
+                                .then(Commands.literal("hotbar_hide")
+                                        .then(Commands.argument("players", EntityArgument.players())
+                                                .then(Commands.argument("value", BoolArgumentType.bool())
+                                                        .executes(TalesMakerCommands::uiHotbarHide))))
+                                .then(Commands.literal("slot_limit")
+                                        .then(Commands.argument("players", EntityArgument.players())
+                                                .then(Commands.argument("hotbar_slots", IntegerArgumentType.integer(0, 9))
+                                                        .then(Commands.argument("inventory_slots", IntegerArgumentType.integer(0, 27))
+                                                                .executes(TalesMakerCommands::uiSlotLimit))))))
                         .then(Commands.literal("monologue")
                                 // /talesmaker monologue enable <preset>
                                 .then(Commands.literal("enable")
@@ -259,6 +286,12 @@ public class TalesMakerCommands {
                                 // /talesmaker monologue disable
                                 .then(Commands.literal("disable")
                                         .executes(TalesMakerCommands::monologueDisable)))
+                        .then(Commands.literal("tutorial")
+                                .then(Commands.literal("start")
+                                        .then(Commands.argument("players", EntityArgument.players())
+                                                .then(Commands.argument("id", ResourceLocationArgument.id())
+                                                        .suggests(TUTORIAL_SUGGESTIONS)
+                                                        .executes(TalesMakerCommands::tutorialStart)))))
                         .then(Commands.literal("history")
                                 // /talesmaker history clear
                                 .then(Commands.literal("clear")
@@ -636,6 +669,55 @@ public class TalesMakerCommands {
         return 1;
     }
 
+    private static int tutorialStart(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        var players = EntityArgument.getPlayers(context, "players");
+        ResourceLocation tutorialId = ResourceLocationArgument.getId(context, "id");
+
+        TutorialPreset preset = TalesMaker.TUTORIAL_MANAGER.getPreset(tutorialId).orElse(null);
+        if (preset == null) {
+            source.sendFailure(Component.literal("Unknown tutorial: " + tutorialId));
+            return 0;
+        }
+
+        int count = 0;
+        for (ServerPlayer player : players) {
+            java.util.List<TutorialStartPacket.ClientStep> steps = new java.util.ArrayList<>();
+            for (TutorialStep step : preset.steps()) {
+                var cutout = step.cutout();
+                steps.add(new TutorialStartPacket.ClientStep(
+                        step.text(),
+                        cutout.x(),
+                        cutout.y(),
+                        cutout.width(),
+                        cutout.height(),
+                        step.advanceKey(),
+                        step.openScreen(),
+                        step.command(),
+                        step.allowInteraction()
+                ));
+            }
+
+            TutorialStartPacket packet = new TutorialStartPacket(
+                    tutorialId,
+                    preset.type(),
+                    preset.title(),
+                    preset.description(),
+                    steps,
+                    preset.sounds().open(),
+                    preset.sounds().close(),
+                    preset.sounds().advance()
+            );
+            PacketDistributor.sendToPlayer(player, packet);
+            TutorialSessionManager.start(player, preset);
+            count++;
+        }
+
+        int finalCount = count;
+        source.sendSuccess(() -> Component.literal("Started tutorial '" + tutorialId + "' for " + finalCount + " player(s)"), true);
+        return count;
+    }
+
     private static int bindAdd(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         String key = StringArgumentType.getString(context, "key");
@@ -654,6 +736,52 @@ public class TalesMakerCommands {
         for (ServerPlayer player : players) {
             PacketDistributor.sendToPlayer(player, new BindActionPacket("remove", key, ""));
         }
+        return players.size();
+    }
+
+    private static int uiInventoryLock(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        var players = EntityArgument.getPlayers(context, "players");
+        boolean value = BoolArgumentType.getBool(context, "value");
+
+        for (ServerPlayer player : players) {
+            InventoryRestrictions current = InventoryControlManager.get(player);
+            InventoryControlManager.applyToPlayer(player, current.withBlockInventoryOpen(value));
+        }
+
+        source.sendSuccess(() -> Component.literal("Inventory open lock set to " + value + " for " + players.size() + " player(s)"), true);
+        return players.size();
+    }
+
+    private static int uiHotbarHide(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        var players = EntityArgument.getPlayers(context, "players");
+        boolean value = BoolArgumentType.getBool(context, "value");
+
+        for (ServerPlayer player : players) {
+            InventoryRestrictions current = InventoryControlManager.get(player);
+            InventoryControlManager.applyToPlayer(player, current.withHideHotbar(value));
+        }
+
+        source.sendSuccess(() -> Component.literal("Hotbar visibility set to " + (value ? "hidden" : "visible")
+                + " for " + players.size() + " player(s)"), true);
+        return players.size();
+    }
+
+    private static int uiSlotLimit(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        var players = EntityArgument.getPlayers(context, "players");
+        int hotbarSlots = IntegerArgumentType.getInteger(context, "hotbar_slots");
+        int inventorySlots = IntegerArgumentType.getInteger(context, "inventory_slots");
+
+        for (ServerPlayer player : players) {
+            InventoryRestrictions current = InventoryControlManager.get(player);
+            InventoryRestrictions updated = current.withHotbarSlots(hotbarSlots).withInventorySlots(inventorySlots);
+            InventoryControlManager.applyToPlayer(player, updated);
+        }
+
+        source.sendSuccess(() -> Component.literal("Slot limits set: hotbar=" + hotbarSlots
+                + ", inventory=" + inventorySlots + " for " + players.size() + " player(s)"), true);
         return players.size();
     }
 
